@@ -6,6 +6,7 @@ LDFLAGS = -L/usr/local/lib -lraylib -lm
 
 # Emscripten specific flags for the web build
 EMCC_FLAGS = \
+	-DPLATFORM_WEB \
 	-s USE_WEBGL2=1 \
 	-s ASYNCIFY \
 	-s ALLOW_MEMORY_GROWTH \

@@ -33,7 +33,7 @@ int main(void) {
 
     // Control variables
     double amplitude = 100.0;
-    double frequency = 3.0;
+    double frequency = 30.0;
     int pixelsPerBit = 50;
     double noise_level = 0.0;
     int message_offset = 0;
@@ -88,6 +88,22 @@ int main(void) {
                         case SDLK_SPACE:
                             needsAngleUpdate = !needsAngleUpdate;
                             message_offset = 0;
+                            break;
+                        case SDLK_j:
+                            if (message_offset < 10) {
+                                message_offset = 0;
+                            } else {
+                                message_offset -= 10;
+                            }
+                            break;
+                        case SDLK_l:
+                            message_offset += 10;
+                            break;
+                        case SDLK_0:
+                            frequency = 30.0;
+                            amplitude = 100.0;
+                            noise_level = 0.0;
+                            pixelsPerBit = 50;
                             break;
                     }
                 }

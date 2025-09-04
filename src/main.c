@@ -26,7 +26,7 @@ typedef enum { MOD_ASK, MOD_FSK, MOD_PSK } ModulationType;
 // All variables needed by the main loop are moved here to be accessible.
 SDL_Window* window = NULL;
 SDL_Renderer* renderer = NULL;
-TextObject status_line1, status_line2, mode_indicator_text, input_text_display;
+TextObject status_line1, status_line2, mode_indicator_text, input_text_display, help_prompt_text;
 TTF_Font* font_size_20 = NULL;
 TTF_Font* font_size_18 = NULL;
 
@@ -37,6 +37,7 @@ double noise_level = 0.0;
 int message_offset = 0;
 bool needsTextUpdate = true;
 bool needsAngleUpdate = true;
+bool showHelpScreen = false;
 
 AppMode current_mode = MODE_TYPING;
 ModulationType current_mod_type = MOD_ASK;
@@ -71,19 +72,25 @@ void main_loop() {
         if (e.type == SDL_KEYDOWN) {
             // The ESCAPE key toggles between modes
             if (e.key.keysym.sym == SDLK_ESCAPE) {
-                if (current_mode == MODE_TYPING) {
-                    current_mode = MODE_COMMAND;
-                    SDL_StopTextInput();
-                } else {
-                    current_mode = MODE_TYPING;
-                    SDL_StartTextInput();
+                    if (showHelpScreen == false) {
+                        if (current_mode == MODE_TYPING) {
+                        current_mode = MODE_COMMAND;
+                        SDL_StopTextInput();
+                    } else {
+                        current_mode = MODE_TYPING;
+                        SDL_StartTextInput();
+                    }
+                    needsTextUpdate = true;
                 }
-                needsTextUpdate = true;
             }
 
             // Handle commands only when in Command Mode
             if (current_mode == MODE_COMMAND) {
                 switch (e.key.keysym.sym) {
+                    case SDLK_h:
+                        showHelpScreen = !showHelpScreen;
+                        needsTextUpdate = true;
+                        break;
                     // Keybindings for changing modulation type
                     case SDLK_1: current_mod_type = MOD_ASK; needsTextUpdate = true; break;
                     case SDLK_2: current_mod_type = MOD_FSK; needsTextUpdate = true; break;
@@ -116,18 +123,20 @@ void main_loop() {
             }
 
             // These keys work in either mode
-            switch (e.key.keysym.sym) {
-                case SDLK_UP:    amplitude += 5.0; needsTextUpdate = true; break;
-                case SDLK_DOWN:  amplitude -= 5.0; if (amplitude < 0) amplitude = 0; needsTextUpdate = true; break;
-                case SDLK_RIGHT: frequency += 0.1; needsTextUpdate = true; break;
-                case SDLK_LEFT:  frequency -= 0.1; if (frequency < 0.1) frequency = 0.1; needsTextUpdate = true; break;
-                case SDLK_RETURN:
-                    strcpy(activeMessage, inputText); activeMessageLength = inputTextLength;
-                    inputText[0] = '\0'; inputTextLength = 0;
-                    message_offset = 0; needsTextUpdate = true; break;
-                case SDLK_BACKSPACE:
-                    if (inputTextLength > 0) { inputText[inputTextLength - 1] = '\0'; inputTextLength--; }
-                    needsTextUpdate = true; break;
+            if (showHelpScreen == false) {
+                switch (e.key.keysym.sym) {
+                        case SDLK_UP:    amplitude += 5.0; needsTextUpdate = true; break;
+                        case SDLK_DOWN:  amplitude -= 5.0; if (amplitude < 0) amplitude = 0; needsTextUpdate = true; break;
+                        case SDLK_RIGHT: frequency += 0.1; needsTextUpdate = true; break;
+                        case SDLK_LEFT:  frequency -= 0.1; if (frequency < 0.1) frequency = 0.1; needsTextUpdate = true; break;
+                        case SDLK_RETURN:
+                            strcpy(activeMessage, inputText); activeMessageLength = inputTextLength;
+                            inputText[0] = '\0'; inputTextLength = 0;
+                            message_offset = 0; needsTextUpdate = true; break;
+                        case SDLK_BACKSPACE:
+                            if (inputTextLength > 0) { inputText[inputTextLength - 1] = '\0'; inputTextLength--; }
+                            needsTextUpdate = true; break;
+                }
             }
         }
     }
@@ -144,7 +153,7 @@ void main_loop() {
             case MOD_PSK: mod_type_string = "PSK"; break;
             default:      mod_type_string = "Unknown"; break;
         }
-        snprintf(buffer_l1, sizeof(buffer_l1), "y = %.f * sin(%.1f * x)", amplitude, frequency);
+        snprintf(buffer_l1, sizeof(buffer_l1), " Carrier Signal: y = %.f * sin(%.1f * x), %s Modulation", amplitude, frequency, mod_type_string);
         snprintf(buffer_l2, sizeof(buffer_l2), "Baud (px/bit): %d | Noise: %.2f", pixelsPerBit, noise_level);
         
         if (current_mode == MODE_TYPING) {
@@ -157,78 +166,111 @@ void main_loop() {
         update_text_object(&status_line2, buffer_l2);
         update_text_object(&mode_indicator_text, buffer_mode);
         update_text_object(&input_text_display, inputText);
+        update_text_object(&help_prompt_text, "Press ESC for commands, then H for help");
         needsTextUpdate = false;
     }
 
-    // --- DRAWING ---
-    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); SDL_RenderClear(renderer);
-    SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255); SDL_RenderDrawLine(renderer, 0, SCREEN_HEIGHT / 2, SCREEN_WIDTH, SCREEN_HEIGHT / 2);
+    if (showHelpScreen) {
+        // Next, draw a semi-transparent overlay
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_BLEND);
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 200); // Dark, semi-transparent
+        SDL_Rect overlayRect = { 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT };
+        SDL_RenderFillRect(renderer, &overlayRect);
+        SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
 
-    int prev_y;
-    double y = 0.0;
+        // Finally, draw the help text lines
+        const char* help_lines[] = {
+            "--- CONTROLS (COMMAND MODE) ---",
+            " ",
+            "ESC       -  Toggle Typing/Command Mode",
+            "H         -  Toggle this Help Screen",
+            "1, 2, 3   -  Switch Modulation (ASK, FSK, PSK)",
+            "Up / Down Arrows -  Adjust Amplitude",
+            "Left / Right Arrows -  Adjust Frequency",
+            "B / Shift+B -  Decrekase / Increase Baud Rate",
+            "N / Shift+N -  Decrease / Increase Noise",
+            "Enter     -  Modulate Typed Message",
+            NULL
+        };
 
-    for (int x = 0; x < SCREEN_WIDTH; x++) {
-        int bit_value = 0;
-        if (activeMessageLength > 0) {
-            int message_length_in_pixels = activeMessageLength * 8 * pixelsPerBit;
-            int lookup_x = (x + message_offset) % message_length_in_pixels;
-            int bit_index = lookup_x / pixelsPerBit; 
-            int char_index = bit_index / 8;
-            if (char_index < activeMessageLength) {
-                int bit_in_char = bit_index % 8;
-                bit_value = (activeMessage[char_index] >> (7 - bit_in_char)) & 1;
-            }
+        int y_pos = 100; // Starting Y position for the text
+        for (int i = 0; help_lines[i] != NULL; i++) {
+            update_text_object(&status_line1, help_lines[i]); // Re-use an existing text object
+            draw_text_object(&status_line1, (SCREEN_WIDTH - status_line1.rect.w) / 2, y_pos); // Center the text
+            y_pos += status_line1.rect.h + 5; // Move down for the next line
         }
+    } else {
+        // --- DRAWING ---
+        SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255); SDL_RenderClear(renderer);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255); SDL_RenderDrawLine(renderer, 0, SCREEN_HEIGHT / 2, SCREEN_WIDTH, SCREEN_HEIGHT / 2);
 
-        // --- NEW: Main modulation logic switch ---
-        switch (current_mod_type) {
-            case MOD_ASK: {
-                double low_amplitude = amplitude * 0.1; 
-                double current_amplitude = low_amplitude; 
-                if (bit_value == 1) {
-                    int x_in_bit = (x + message_offset) % pixelsPerBit;
-                    double phase_in_bit = ((double)x_in_bit / (double)pixelsPerBit) * M_PI;
-                    double pulse_shape_factor = sin(phase_in_bit);
-                    current_amplitude = low_amplitude + (amplitude - low_amplitude) * pulse_shape_factor;
+        int prev_y;
+        double y = 0.0;
+
+        for (int x = 0; x < SCREEN_WIDTH; x++) {
+            int bit_value = 0;
+            if (activeMessageLength > 0) {
+                int message_length_in_pixels = activeMessageLength * 8 * pixelsPerBit;
+                int lookup_x = (x + message_offset) % message_length_in_pixels;
+                int bit_index = lookup_x / pixelsPerBit; 
+                int char_index = bit_index / 8;
+                if (char_index < activeMessageLength) {
+                    int bit_in_char = bit_index % 8;
+                    bit_value = (activeMessage[char_index] >> (7 - bit_in_char)) & 1;
                 }
-                double sin_arg = (((double)x * frequency) * M_PI / 180.0);
-                y = current_amplitude * sin(sin_arg);
-                break;
             }
 
-            case MOD_FSK: {
-                // For FSK, a '0' is a low frequency and a '1' is a high frequency.
-                double freq_mark = frequency; // Frequency for '1'
-                double freq_space = frequency * 2.0; // Frequency for '0'
-                double current_freq = (bit_value == 1) ? freq_mark : freq_space;
-                // Note: Simple FSK has phase discontinuities at bit changes.
-                double sin_arg = (((double)x * current_freq) * M_PI / 180.0);
-                y = amplitude * sin(sin_arg);
-                break;
+            // --- Main modulation logic switch ---
+            switch (current_mod_type) {
+                case MOD_ASK: {
+                    double low_amplitude = amplitude * 0.1; 
+                    double current_amplitude = low_amplitude; 
+                    if (bit_value == 1) {
+                        int x_in_bit = (x + message_offset) % pixelsPerBit;
+                        double phase_in_bit = ((double)x_in_bit / (double)pixelsPerBit) * M_PI;
+                        double pulse_shape_factor = sin(phase_in_bit);
+                        current_amplitude = low_amplitude + (amplitude - low_amplitude) * pulse_shape_factor;
+                    }
+                    double sin_arg = (((double)x * frequency) * M_PI / 180.0);
+                    y = current_amplitude * sin(sin_arg);
+                    break;
+                }
+
+                case MOD_FSK: {
+                    // For FSK, a '0' is a low frequency and a '1' is a high frequency.
+                    double freq_mark = frequency; // Frequency for '1'
+                    double freq_space = frequency * 2.0; // Frequency for '0'
+                    double current_freq = (bit_value == 1) ? freq_mark : freq_space;
+                    // Note: Simple FSK has phase discontinuities at bit changes.
+                    double sin_arg = (((double)x * current_freq) * M_PI / 180.0);
+                    y = amplitude * sin(sin_arg);
+                    break;
+                }
+
+                case MOD_PSK: {
+                    // For BPSK, a '0' is normal phase, a '1' is inverted phase.
+                    double phase_shift = (bit_value == 1) ? M_PI : 0.0;
+                    double sin_arg = (((double)x * frequency) * M_PI / 180.0) + phase_shift;
+                    y = amplitude * sin(sin_arg);
+                    break;
+                }
             }
 
-            case MOD_PSK: {
-                // For BPSK, a '0' is normal phase, a '1' is inverted phase.
-                double phase_shift = (bit_value == 1) ? M_PI : 0.0;
-                double sin_arg = (((double)x * frequency) * M_PI / 180.0) + phase_shift;
-                y = amplitude * sin(sin_arg);
-                break;
-            }
+            if (amplitude > 0 && noise_level > 0) { y += (rand() % 21 - 10) * noise_level; }
+            int current_y = (SCREEN_HEIGHT / 2) - (int)y;
+            if (x > 0) { SDL_RenderDrawLine(renderer, x - 1, prev_y, x, current_y); }
+            prev_y = current_y;
         }
-
-        if (amplitude > 0 && noise_level > 0) { y += (rand() % 21 - 10) * noise_level; }
-        int current_y = (SCREEN_HEIGHT / 2) - (int)y;
-        if (x > 0) { SDL_RenderDrawLine(renderer, x - 1, prev_y, x, current_y); }
-        prev_y = current_y;
-    }
     
-    draw_text_object(&status_line1, 10, 10);
-    draw_text_object(&status_line2, 10, 10 + status_line1.rect.h);
-    draw_text_object(&mode_indicator_text, 10, 10 + status_line1.rect.h + status_line2.rect.h);
-    draw_text_object(&input_text_display, 10, SCREEN_HEIGHT - input_text_display.rect.h - 10);
+        draw_text_object(&status_line1, 10, 10);
+        draw_text_object(&status_line2, 10, 10 + status_line1.rect.h);
+        draw_text_object(&mode_indicator_text, 10, 10 + status_line1.rect.h + status_line2.rect.h);
+        draw_text_object(&input_text_display, 10, SCREEN_HEIGHT - input_text_display.rect.h - 10);
+        draw_text_object(&help_prompt_text, SCREEN_WIDTH - help_prompt_text.rect.w - 10, 10);
+    }
 
     SDL_RenderPresent(renderer); 
-    if (needsAngleUpdate) { message_offset++; }
+    if (needsAngleUpdate && !showHelpScreen) { message_offset++; }
     
     // For native builds, we add a small delay. For web, the browser controls the frame rate.
     #ifndef __EMSCRIPTEN__
@@ -270,6 +312,7 @@ int main(void) {
 
     status_line1 = create_text_object(renderer, font_size_20, (SDL_Color){255, 255, 255, 255});
     status_line2 = create_text_object(renderer, font_size_20, (SDL_Color){255, 255, 255, 255});
+    help_prompt_text = create_text_object(renderer, font_size_18, (SDL_Color){180, 180, 180, 255});
     mode_indicator_text = create_text_object(renderer, font_size_18, (SDL_Color){150, 255, 150, 255});
     input_text_display = create_text_object(renderer, font_size_20, (SDL_Color){200, 200, 20, 255});
     
@@ -292,6 +335,7 @@ int main(void) {
     destroy_text_object(&status_line2);
     destroy_text_object(&mode_indicator_text);
     destroy_text_object(&input_text_display);
+    destroy_text_object(&help_prompt_text);
     SDL_DestroyRenderer(renderer);
     SDL_DestroyWindow(window);
     TTF_Quit();

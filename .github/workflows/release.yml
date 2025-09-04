@@ -5,7 +5,7 @@ name: Build Release Executables
 # This action runs when you create a new "release" on GitHub
 on:
   release:
-    types: [created]
+    types: [created, published]
 
 jobs:
   build:

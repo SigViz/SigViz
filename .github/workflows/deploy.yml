@@ -18,7 +18,7 @@ jobs:
 
       # Step 2: Set up the Emscripten SDK
       - name: Setup Emscripten
-        uses: emscripten-core/setup-emscripten@v4
+        uses: emscripten-core/setup-emscripten@*
         with:
           emscripten-version: 'latest'
 

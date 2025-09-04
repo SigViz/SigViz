@@ -1,6 +1,6 @@
 # .github/workflows/deploy.yml
 
-name: Build and Deploy to GitHub Pages
+name: Build and Deploy to GitHub Pages (Manual Docker Method)
 
 on:
   push:
@@ -10,36 +10,34 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-
-    # This line tells the job to run inside a Docker container
-    container:
-      image: emscripten/emsdk:latest
-
+    
     steps:
-      # Step 1: Check out the source code
-      # This runs inside the container and checks the code into the container's filesystem
+      # Step 1: Check out the source code. This makes it available in the runner.
       - name: Checkout Source Repo
         uses: actions/checkout@v4
 
-      # The "Setup Emscripten" step is NO LONGER NEEDED.
-      # The container already has it.
-
-      # Step 2: Build the WebAssembly project
-      # The 'emcc' command is readily available in the container
-      - name: Build Project
+      # Step 2: Manually start the Emscripten Docker container in the background.
+      # This is the equivalent of the 'before_install' step in the Travis CI example.
+      # The -v flag maps your project directory into the container's /src directory.
+      - name: Start the Emscripten Container
         run: |
-          emcc \
-           -o app.html src/*.c \
-           -Wall -s USE_SDL=2 -s USE_SDL_TTF=2 \
-           --preload-file assets@assets \
-           -s ALLOW_MEMORY_GROWTH
+          docker run -dit --name emscripten \
+            -v $GITHUB_WORKSPACE:/src \
+            trzeci/emscripten:sdk-incoming-64bit bash
 
-      # Step 3: Deploy the build files to Repo B
+      # Step 3: Build the project by executing a command inside the running container.
+      # This is the equivalent of the 'script' step in the Travis CI example.
+      - name: Build Project Inside Container
+        run: |
+          docker exec emscripten \
+            bash -c "cd /src && emcc -o app.html src/*.c \
+            -Wall -s USE_SDL=2 -s USE_SDL_TTF=2 \
+            --preload-file assets@assets -s ALLOW_MEMORY_GROWTH"
+
+      # Step 4: Deploy the build files to Repo B.
+      # This step is the same as before, as the build files were created in the shared directory.
       - name: Push to Deployment Repo
         run: |
-          # The container might not have git, so we install it to be safe
-          apt-get update && apt-get install -y git
-          
           git clone "https://x-access-token:${{ secrets.ACCESS_TOKEN }}@github.com/SigViz/sigviz.github.io.git" deploy_repo
           cd deploy_repo
           cp ../app.html ../app.js ../app.wasm ../app.data .

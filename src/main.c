@@ -71,7 +71,7 @@ void main_loop() {
         
         if (e.type == SDL_KEYDOWN) {
             // The ESCAPE key toggles between modes
-            if (e.key.keysym.sym == SDLK_ESCAPE) {
+            if (e.key.keysym.sym == SDLK_TAB) {
                     if (showHelpScreen == false) {
                         if (current_mode == MODE_TYPING) {
                         current_mode = MODE_COMMAND;
@@ -157,16 +157,20 @@ void main_loop() {
         snprintf(buffer_l2, sizeof(buffer_l2), "Baud (px/bit): %d | Noise: %.2f", pixelsPerBit, noise_level);
         
         if (current_mode == MODE_TYPING) {
-            snprintf(buffer_mode, sizeof(buffer_mode), "Mode: Typing (Press ESC for commands)");
+            snprintf(buffer_mode, sizeof(buffer_mode), "Mode: Typing (Press TAB for commands)");
         } else {
-            snprintf(buffer_mode, sizeof(buffer_mode), "Mode: Command (1:ASK 2:FSK 3:PSK) (Press ESC for typing)");
+            snprintf(buffer_mode, sizeof(buffer_mode), "Mode: Command (1:ASK 2:FSK 3:PSK) (Press TAB for typing)");
         }
         
         update_text_object(&status_line1, buffer_l1);
         update_text_object(&status_line2, buffer_l2);
         update_text_object(&mode_indicator_text, buffer_mode);
         update_text_object(&input_text_display, inputText);
-        update_text_object(&help_prompt_text, "Press ESC for commands, then H for help");
+        if (current_mode == MODE_COMMAND) {
+            update_text_object(&help_prompt_text, "Press H for help");
+        } else {
+            update_text_object(&help_prompt_text, "Press TAB for commands, then H for help");
+        }
         needsTextUpdate = false;
     }
 

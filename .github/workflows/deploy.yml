@@ -16,8 +16,18 @@ jobs:
       - name: Checkout Source Repo
         uses: actions/checkout@v4
 
-      # Step 2: Build the project using the Makefile inside a Docker container.
-      # This now correctly uses 'make web' to build the right files.
+      # Step 2: Explicitly build the Raylib port first.
+      # This ensures the library is compiled and available before we need it.
+      - name: Build Raylib Port
+        run: |
+          docker run --rm \
+            -v $GITHUB_WORKSPACE:/src \
+            -w /src \
+            trzeci/emscripten:sdk-incoming-64bit \
+            embuilder build raylib
+
+      # Step 3: Build your project using the Makefile.
+      # This will now find the pre-built Raylib library.
       - name: Build Project
         run: |
           docker run --rm \
@@ -26,16 +36,11 @@ jobs:
             trzeci/emscripten:sdk-incoming-64bit \
             make web
 
-      # Step 3: Deploy the built files to your other repository.
+      # Step 4: Deploy the built files to your other repository.
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
-          # The Personal Access Token we created earlier
           personal_token: ${{ secrets.SIGVIZ }}
-          # The repository to push the build results to
           external_repository: SigViz/sigviz.github.io
-          # The directory in this repository that contains the built website
-          # The Makefile outputs to the root, so we deploy from there.
           publish_dir: ./
-          # Keep the destination repository clean
           keep_files: false

@@ -1,0 +1,51 @@
+# .github/workflows/release.yml
+
+name: Build Release Executables
+
+# This action runs when you create a new "release" on GitHub
+on:
+  release:
+    types: [created]
+
+jobs:
+  build:
+    # Use a strategy matrix to run this job on all three operating systems
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }} # Run on the OS specified in the matrix
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Setup steps are different for each OS
+    - name: Install dependencies (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: sudo apt-get update && sudo apt-get install -y libsdl2-dev libsdl2-ttf-dev
+
+    - name: Install dependencies (Windows)
+      if: matrix.os == 'windows-latest'
+      run: |
+        # Using the msys2 package manager for Windows
+        pacman -Syu --noconfirm
+        pacman -S --noconfirm mingw-w64-x86_64-gcc mingw-w64-x86_64-SDL2 mingw-w64-x86_64-SDL2_ttf
+
+    - name: Install dependencies (macOS)
+      if: matrix.os == 'macos-latest'
+      run: brew install sdl2 sdl2_ttf
+
+    # Build step is the same if your Makefile is cross-platform
+    - name: Build the application
+      run: make
+
+    # This step archives the build output so you can download it
+    - name: Archive artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: modulator-${{ matrix.os }}
+        path: |
+          bin/
+          # For Windows, also include the DLLs if needed
+          # vendor/bin/*.dll

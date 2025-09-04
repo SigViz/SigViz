@@ -12,8 +12,8 @@
 #include <SDL2/SDL.h>
 #include "text_renderer.h"
 
-#define SCREEN_WIDTH 1240
-#define SCREEN_HEIGHT 720
+int SCREEN_WIDTH = 1240;
+int SCREEN_HEIGHT = 720;
 #define INPUT_BUFFER_SIZE 256
 
 typedef enum {
@@ -189,9 +189,16 @@ int main(void) {
     SDL_Init(SDL_INIT_VIDEO);
     TTF_Init();
 
-    window = SDL_CreateWindow("ASK Modulator", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+    window = SDL_CreateWindow("SigViz", 
+                              SDL_WINDOWPOS_CENTERED, 
+                              SDL_WINDOWPOS_CENTERED, 
+                              0, 0, 
+                              SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_FULLSCREEN_DESKTOP);
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 
+    SDL_GetRendererOutputSize(renderer, &SCREEN_WIDTH, &SCREEN_HEIGHT);
+
+    // Load Fonts
     const char* font_path = "assets/JetBrainsMonoNLNerdFont-Regular.ttf";
     font_size_20 = TTF_OpenFont(font_path, 20);
     font_size_18 = TTF_OpenFont(font_path, 18);

@@ -2,7 +2,6 @@
 
 name: Build and Deploy to GitHub Pages
 
-# This action runs on every push to the 'main' branch of this repository
 on:
   push:
     branches:
@@ -10,41 +9,43 @@ on:
 
 jobs:
   build-and-deploy:
-    runs-on: ubuntu-latest # Use a standard Linux virtual machine
+    runs-on: ubuntu-latest
+
+    # This line tells the job to run inside a Docker container
+    container:
+      image: emscripten/emsdk:latest
+
     steps:
-      # Step 1: Check out the source code from Repo A
+      # Step 1: Check out the source code
+      # This runs inside the container and checks the code into the container's filesystem
       - name: Checkout Source Repo
         uses: actions/checkout@v4
 
-      # Step 2: Set up the Emscripten SDK
-      - name: Setup Emscripten (Manual Method)
-        run: |
-          git clone https://github.com/emscripten-core/emsdk.git
-          cd emsdk
-          ./emsdk install latest
-          ./emsdk activate latest
-          echo "source $(pwd)/emsdk_env.sh" >> $GITHUB_ENV
+      # The "Setup Emscripten" step is NO LONGER NEEDED.
+      # The container already has it.
 
-      # Step 3: Build the WebAssembly project
+      # Step 2: Build the WebAssembly project
+      # The 'emcc' command is readily available in the container
       - name: Build Project
         run: |
           emcc \
            -o app.html src/*.c \
            -Wall -s USE_SDL=2 -s USE_SDL_TTF=2 \
            --preload-file assets@assets \
-           -s ALLOW_MEMORY_GROWTH # Good practice for Emscripten
+           -s ALLOW_MEMORY_GROWTH
 
-      # Step 4: Deploy the build files to Repo B
+      # Step 3: Deploy the build files to Repo B
       - name: Push to Deployment Repo
         run: |
-          git clone "https://x-access-token:${{ secrets.ACCESS_TOKEN }}@https://github.com/SigViz/sigviz.github.io.git" deploy_repo
+          # The container might not have git, so we install it to be safe
+          apt-get update && apt-get install -y git
+          
+          git clone "https://x-access-token:${{ secrets.ACCESS_TOKEN }}@github.com/SigViz/sigviz.github.io.git" deploy_repo
           cd deploy_repo
-          # Copy all the essential web files from the build step
           cp ../app.html ../app.js ../app.wasm ../app.data .
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add .
-          # Commit only if there are changes
           if ! git diff --staged --quiet; then
             git commit -m "Automated deployment from source repo"
             git push

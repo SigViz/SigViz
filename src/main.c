@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <SDL2/SDL.h>
 #include "text_renderer.h"
+#include "tinyfiledialogs.h"
 
 int SCREEN_WIDTH = 1240;
 int SCREEN_HEIGHT = 720;
@@ -48,13 +49,26 @@ char activeMessage[INPUT_BUFFER_SIZE] = {0};
 int activeMessageLength = 0;
 bool quit = false;
 
-void export_waveform(const char* filename) {
-    FILE* outFile = fopen(filename, "wb");
+void export_waveform() {
+    char const * filterPatterns[1] = { "*.32fl" };
+    char const * saveFileName = tinyfd_saveFileDialog(
+        "Save Waveform",
+        "waveform.32fl",
+        1,
+        filterPatterns,
+        "32-bit Float Waveform"
+    );
+
+    if (!saveFileName) {
+        printf("Save file dialog cancelled.\n");
+        return;
+    }
+
+    FILE* outFile = fopen(saveFileName, "wb");
     if (outFile == NULL) {
         perror("Error opening file for writing");
         return;
     }
-
     for (int x = 0; x < SCREEN_WIDTH; x++) {
         int bit_value = 0;
         if (activeMessageLength > 0) {
@@ -108,7 +122,7 @@ void export_waveform(const char* filename) {
     }
 
     fclose(outFile);
-    printf("Waveform exported to %s\n", filename);
+    printf("Waveform exported to %s\n", saveFileName);
 }
 
 // --- Main Loop Function ---
@@ -184,7 +198,7 @@ void main_loop() {
                         message_offset = 0;
                         break;
                     case SDLK_s:
-                        export_waveform("waveform.32fl");
+                        export_waveform();
                         break;
                 }
             }
@@ -263,6 +277,7 @@ void main_loop() {
             "Enter     -  Modulate Typed Message",
             "Space     -  Pause Message Offset",
             "J / K     -  Decrease / Increase Message Offset",
+            "S         -  Save Waveform as 32fl file"
             NULL
         };
 

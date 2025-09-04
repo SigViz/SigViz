@@ -38,7 +38,7 @@ jobs:
       # This step is the same as before, as the build files were created in the shared directory.
       - name: Push to Deployment Repo
         run: |
-          git clone "https://x-access-token:${{ secrets.SigViz }}@github.com/SigViz/sigviz.github.io.git" deploy_repo
+          git clone "https://x-access-token:${{ secrets.SIGVIZ }}@github.com/SigViz/sigviz.github.io.git" deploy_repo
           cd deploy_repo
           cp ../app.html ../app.js ../app.wasm ../app.data .
           git config user.name "GitHub Actions"

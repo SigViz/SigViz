@@ -16,27 +16,17 @@ jobs:
       - name: Checkout Source Repo
         uses: actions/checkout@v4
 
-      # Step 2: Explicitly build the Raylib port first.
-      # This ensures the library is compiled and available before we need it.
-      - name: Build Raylib Port
-        run: |
-          docker run --rm \
-            -v $GITHUB_WORKSPACE:/src \
-            -w /src \
-            trzeci/emscripten:sdk-incoming-64bit \
-            embuilder build raylib
-
-      # Step 3: Build your project using the Makefile.
-      # This will now find the pre-built Raylib library.
+      # Step 2: Build the project using the official Emscripten SDK Docker image.
+      # This image is standardized and will correctly build the raylib port.
       - name: Build Project
         run: |
           docker run --rm \
             -v $GITHUB_WORKSPACE:/src \
             -w /src \
-            trzeci/emscripten:sdk-incoming-64bit \
+            emscripten/emsdk:latest \
             make web
 
-      # Step 4: Deploy the built files to your other repository.
+      # Step 3: Deploy the built files to your GitHub Pages repository.
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:

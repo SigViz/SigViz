@@ -1,0 +1,50 @@
+# .github/workflows/deploy.yml
+
+name: Build and Deploy to GitHub Pages
+
+# This action runs on every push to the 'main' branch of this repository
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest # Use a standard Linux virtual machine
+    steps:
+      # Step 1: Check out the source code from Repo A
+      - name: Checkout Source Repo
+        uses: actions/checkout@v4
+
+      # Step 2: Set up the Emscripten SDK
+      - name: Setup Emscripten
+        uses: emscripten-project/setup-emscripten@v4
+        with:
+          emscripten-version: 'latest'
+
+      # Step 3: Build the WebAssembly project
+      - name: Build Project
+        run: |
+          emcc \
+           -o app.html src/*.c \
+           -Wall -s USE_SDL=2 -s USE_SDL_TTF=2 \
+           --preload-file assets@assets \
+           -s ALLOW_MEMORY_GROWTH # Good practice for Emscripten
+
+      # Step 4: Deploy the build files to Repo B
+      - name: Push to Deployment Repo
+        run: |
+          git clone "https://x-access-token:${{ secrets.ACCESS_TOKEN }}@https://github.com/SigViz/sigviz.github.io.git" deploy_repo
+          cd deploy_repo
+          # Copy all the essential web files from the build step
+          cp ../app.html ../app.js ../app.wasm ../app.data .
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add .
+          # Commit only if there are changes
+          if ! git diff --staged --quiet; then
+            git commit -m "Automated deployment from source repo"
+            git push
+          else
+            echo "No changes to deploy."
+          fi

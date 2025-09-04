@@ -191,7 +191,7 @@ void main_loop() {
             "N / Shift+N -  Decrease / Increase Noise",
             "Enter     -  Modulate Typed Message",
             "Space     -  Pause Message Offset",
-            "J / K     -  Decrease / Increase Message Offset"
+            "J / K     -  Decrease / Increase Message Offset",
             NULL
         };
 

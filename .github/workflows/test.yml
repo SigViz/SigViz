@@ -14,5 +14,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Test Setup Emscripten Action
-        uses: emscripten-core/setup-emscripten@v4
+      - name: Setup Emscripten (Manual Method)
+        run: |
+          git clone https://github.com/emscripten-core/emsdk.git
+          cd emsdk
+          ./emsdk install latest
+          ./emsdk activate latest
+          echo "source $(pwd)/emsdk_env.sh" >> $GITHUB_ENV

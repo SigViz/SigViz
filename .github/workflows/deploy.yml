@@ -27,6 +27,7 @@ jobs:
             bash -c "cd /src && emcc -o build/app.html src/*.c \
             -Wall -s USE_SDL=2 -s USE_SDL_TTF=2 \
             --preload-file assets@assets -s ALLOW_MEMORY_GROWTH"
+            --shell-file /src/template.html"
 
       # Step 3: Deploy the contents of the 'build' directory to your other repository.
       # This action handles the git clone, commit, and push automatically.

@@ -131,6 +131,7 @@ void export_waveform() {
     fclose(outFile);
     printf("Waveform exported to %s\n", saveFileName);
 }
+#endif
 
 // --- Main Loop Function ---
 // All the repeating logic from your old while loop now lives here.

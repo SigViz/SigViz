@@ -50,12 +50,7 @@ int activeMessageLength = 0;
 bool quit = false;
 
 
-#ifdef __EMSCRIPTEN__
-// A dummy function for the web build, since file dialogs are not supported.
-void export_waveform() {
-    printf("Export waveform is not available in the web version.\n");
-}
-#else
+EMSCRIPTEN_KEEPALIVE
 void export_waveform() {
     char const * filterPatterns[1] = { "*.32fl" };
     char const * saveFileName = tinyfd_saveFileDialog(
@@ -131,7 +126,6 @@ void export_waveform() {
     fclose(outFile);
     printf("Waveform exported to %s\n", saveFileName);
 }
-#endif
 
 // --- Main Loop Function ---
 // All the repeating logic from your old while loop now lives here.
@@ -242,7 +236,7 @@ void main_loop() {
             case MOD_PSK: mod_type_string = "PSK"; break;
             default:      mod_type_string = "Unknown"; break;
         }
-        snprintf(buffer_l1, sizeof(buffer_l1), " Carrier Signal: y = %.f * sin(%.1f * x), %s Modulation", amplitude, frequency, mod_type_string);
+        snprintf(buffer_l1, sizeof(buffer_l1), "Carrier Signal: y = %.f * sin(%.1f * x), %s Modulation", amplitude, frequency, mod_type_string);
         snprintf(buffer_l2, sizeof(buffer_l2), "Baud (px/bit): %d | Noise: %.2f", pixelsPerBit, noise_level);
         
         if (current_mode == MODE_TYPING) {

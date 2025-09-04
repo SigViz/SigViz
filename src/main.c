@@ -50,6 +50,14 @@ void main_loop() {
     // --- EVENT HANDLING ---
     SDL_Event e;
     while (SDL_PollEvent(&e) != 0) {
+        if (e.type == SDL_WINDOWEVENT) {
+            // Check if the window was resized
+            if (e.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+                // If so, update our screen dimension variables
+                SDL_GetRendererOutputSize(renderer, &SCREEN_WIDTH, &SCREEN_HEIGHT);
+            }
+        }
+        
         if (e.type == SDL_QUIT) { quit = true; } 
 
         // Handle text input only when in Typing Mode

@@ -36,6 +36,6 @@ jobs:
           # The Personal Access Token we created earlier
           personal_token: ${{ secrets.SIGVIZ }}
           # The repository to push the build results to
-          external_repository: SigViz/sigviz.github.io.git
+          external_repository: SigViz/sigviz.github.io
           # The directory in this repository that contains the built website
           publish_dir: ./build

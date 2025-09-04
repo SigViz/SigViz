@@ -49,6 +49,13 @@ char activeMessage[INPUT_BUFFER_SIZE] = {0};
 int activeMessageLength = 0;
 bool quit = false;
 
+
+#ifdef __EMSCRIPTEN__
+// A dummy function for the web build, since file dialogs are not supported.
+void export_waveform() {
+    printf("Export waveform is not available in the web version.\n");
+}
+#else
 void export_waveform() {
     char const * filterPatterns[1] = { "*.32fl" };
     char const * saveFileName = tinyfd_saveFileDialog(

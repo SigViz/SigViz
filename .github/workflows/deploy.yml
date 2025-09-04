@@ -24,7 +24,7 @@ jobs:
           docker run --rm \
             -v $GITHUB_WORKSPACE:/src \
             trzeci/emscripten:sdk-incoming-64bit \
-            bash -c "cd /src && emcc -o build/app.html src/*.c \
+            bash -c "cd /src && emcc -o build/index.html src/*.c \
             -Wall -s USE_SDL=2 -s USE_SDL_TTF=2 \
             --preload-file assets@assets -s ALLOW_MEMORY_GROWTH \
             --shell-file /src/src/template.html"

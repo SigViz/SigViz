@@ -16,21 +16,17 @@ jobs:
       - name: Checkout Source Repo
         uses: actions/checkout@v4
 
-      # Step 2: Set up Emscripten using the reliable Docker method.
-      # The build files will be created in a new 'build' directory.
+      # Step 2: Build the project using the Makefile inside a Docker container.
+      # This now correctly uses 'make web' to build the right files.
       - name: Build Project
         run: |
-          mkdir build
           docker run --rm \
             -v $GITHUB_WORKSPACE:/src \
+            -w /src \
             trzeci/emscripten:sdk-incoming-64bit \
-            bash -c "cd /src && emcc -o build/index.html src/*.c \
-            -Wall -s USE_SDL=2 -s USE_SDL_TTF=2 \
-            --preload-file assets@assets -s ALLOW_MEMORY_GROWTH \
-            --shell-file /src/src/template.html"
+            make web
 
-      # Step 3: Deploy the contents of the 'build' directory to your other repository.
-      # This action handles the git clone, commit, and push automatically.
+      # Step 3: Deploy the built files to your other repository.
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
@@ -39,4 +35,7 @@ jobs:
           # The repository to push the build results to
           external_repository: SigViz/sigviz.github.io
           # The directory in this repository that contains the built website
-          publish_dir: ./build
+          # The Makefile outputs to the root, so we deploy from there.
+          publish_dir: ./
+          # Keep the destination repository clean
+          keep_files: false

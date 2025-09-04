@@ -48,6 +48,69 @@ char activeMessage[INPUT_BUFFER_SIZE] = {0};
 int activeMessageLength = 0;
 bool quit = false;
 
+void export_waveform(const char* filename) {
+    FILE* outFile = fopen(filename, "wb");
+    if (outFile == NULL) {
+        perror("Error opening file for writing");
+        return;
+    }
+
+    for (int x = 0; x < SCREEN_WIDTH; x++) {
+        int bit_value = 0;
+        if (activeMessageLength > 0) {
+            int message_length_in_pixels = activeMessageLength * 8 * pixelsPerBit;
+            int lookup_x = (x + message_offset) % message_length_in_pixels;
+            int bit_index = lookup_x / pixelsPerBit;
+            int char_index = bit_index / 8;
+            if (char_index < activeMessageLength) {
+                int bit_in_char = bit_index % 8;
+                bit_value = (activeMessage[char_index] >> (7 - bit_in_char)) & 1;
+            }
+        }
+
+        double y = 0.0;
+        switch (current_mod_type) {
+            case MOD_ASK: {
+                double low_amplitude = amplitude * 0.1;
+                double current_amplitude = low_amplitude;
+                if (bit_value == 1) {
+                    int x_in_bit = (x + message_offset) % pixelsPerBit;
+                    double phase_in_bit = ((double)x_in_bit / (double)pixelsPerBit) * M_PI;
+                    double pulse_shape_factor = sin(phase_in_bit);
+                    current_amplitude = low_amplitude + (amplitude - low_amplitude) * pulse_shape_factor;
+                }
+                double sin_arg = (((double)x * frequency) * M_PI / 180.0);
+                y = current_amplitude * sin(sin_arg);
+                break;
+            }
+            case MOD_FSK: {
+                double freq_mark = frequency;
+                double freq_space = frequency * 2.0;
+                double current_freq = (bit_value == 1) ? freq_mark : freq_space;
+                double sin_arg = (((double)x * current_freq) * M_PI / 180.0);
+                y = amplitude * sin(sin_arg);
+                break;
+            }
+            case MOD_PSK: {
+                double phase_shift = (bit_value == 1) ? M_PI : 0.0;
+                double sin_arg = (((double)x * frequency) * M_PI / 180.0) + phase_shift;
+                y = amplitude * sin(sin_arg);
+                break;
+            }
+        }
+
+        if (amplitude > 0 && noise_level > 0) {
+            y += (rand() % 21 - 10) * noise_level;
+        }
+        
+        float sample = (float)y;
+        fwrite(&sample, sizeof(float), 1, outFile);
+    }
+
+    fclose(outFile);
+    printf("Waveform exported to %s\n", filename);
+}
+
 // --- Main Loop Function ---
 // All the repeating logic from your old while loop now lives here.
 void main_loop() {
@@ -119,6 +182,9 @@ void main_loop() {
                         needsTextUpdate = true; break;
                     case SDLK_r:
                         message_offset = 0;
+                        break;
+                    case SDLK_s:
+                        export_waveform("waveform.32fl");
                         break;
                 }
             }

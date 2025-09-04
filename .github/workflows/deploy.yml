@@ -34,7 +34,7 @@ jobs:
         uses: peaceiris/actions-gh-pages@v4
         with:
           # The Personal Access Token we created earlier
-          deploy_key: ${{ secrets.SIGVIZ }}
+          personal_token: ${{ secrets.SIGVIZ }}
           # The repository to push the build results to
           external_repository: SigViz/sigviz.github.io.git
           # The directory in this repository that contains the built website

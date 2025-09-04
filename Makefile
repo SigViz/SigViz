@@ -8,6 +8,7 @@ LDFLAGS = -L/usr/local/lib -lraylib -lm
 EMCC_FLAGS = \
 	-DPLATFORM_WEB \
 	-s USE_WEBGL2=1 \
+	-s USE_GLFW=3 \
 	-s ASYNCIFY \
 	-s ALLOW_MEMORY_GROWTH \
 	--shell-file src/template.html \

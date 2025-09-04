@@ -30,6 +30,7 @@ $(TARGET): $(OBJECTS)
 	@mkdir -p $(BIN_DIR)
 	$(CC) -o $@ $^ $(LDFLAGS)
 	@echo "Build complete: '$@'"
+	cp -r assets $(BIN_DIR)/
 
 # Pattern rule to compile any .c file from src into a .o file in obj
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c

@@ -190,6 +190,8 @@ void main_loop() {
             "B / Shift+B -  Decrekase / Increase Baud Rate",
             "N / Shift+N -  Decrease / Increase Noise",
             "Enter     -  Modulate Typed Message",
+            "Space     -  Pause Message Offset",
+            "J / K     -  Decrease / Increase Message Offset"
             NULL
         };
 

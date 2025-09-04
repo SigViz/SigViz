@@ -117,7 +117,7 @@ void main_loop() {
     // --- UPDATE TEXT ---
     if (needsTextUpdate) {
         char buffer_l1[128], buffer_l2[128], buffer_mode[128];
-        snprintf(buffer_l1, sizeof(buffer_l1), "y = %.1f * sin(%.1f * x)", amplitude, frequency);
+        snprintf(buffer_l1, sizeof(buffer_l1), "y = %.f * sin(%.1f * x)", amplitude, frequency);
         snprintf(buffer_l2, sizeof(buffer_l2), "Baud (px/bit): %d | Noise: %.2f", pixelsPerBit, noise_level);
         
         if (current_mode == MODE_TYPING) {

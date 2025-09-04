@@ -1,0 +1,15 @@
+# Ignore build output directories
+/bin/
+/obj/
+
+# Ignore generated Emscripten web files
+/app.html
+/app.js
+/app.wasm
+/app.data
+
+# Ignore common editor/OS files
+.vscode/
+*.swp
+*~
+.DS_Store

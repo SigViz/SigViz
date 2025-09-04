@@ -16,10 +16,11 @@ int SCREEN_WIDTH = 1240;
 int SCREEN_HEIGHT = 720;
 #define INPUT_BUFFER_SIZE 256
 
-typedef enum {
-    MODE_TYPING,
-    MODE_COMMAND
-} AppMode;
+// AppMode
+typedef enum { MODE_TYPING, MODE_COMMAND } AppMode;
+
+// Modulation Type
+typedef enum { MOD_ASK, MOD_FSK, MOD_PSK } ModulationType;
 
 // --- Global Variables ---
 // All variables needed by the main loop are moved here to be accessible.
@@ -38,6 +39,8 @@ bool needsTextUpdate = true;
 bool needsAngleUpdate = true;
 
 AppMode current_mode = MODE_TYPING;
+ModulationType current_mod_type = MOD_ASK;
+
 char inputText[INPUT_BUFFER_SIZE] = {0};
 int inputTextLength = 0;
 char activeMessage[INPUT_BUFFER_SIZE] = {0};
@@ -57,7 +60,7 @@ void main_loop() {
                 SDL_GetRendererOutputSize(renderer, &SCREEN_WIDTH, &SCREEN_HEIGHT);
             }
         }
-        
+
         if (e.type == SDL_QUIT) { quit = true; } 
 
         // Handle text input only when in Typing Mode
@@ -81,6 +84,10 @@ void main_loop() {
             // Handle commands only when in Command Mode
             if (current_mode == MODE_COMMAND) {
                 switch (e.key.keysym.sym) {
+                    // Keybindings for changing modulation type
+                    case SDLK_1: current_mod_type = MOD_ASK; needsTextUpdate = true; break;
+                    case SDLK_2: current_mod_type = MOD_FSK; needsTextUpdate = true; break;
+                    case SDLK_3: current_mod_type = MOD_PSK; needsTextUpdate = true; break;
                     case SDLK_b:
                         if (e.key.keysym.mod & KMOD_SHIFT) { pixelsPerBit += 2; }
                         else { pixelsPerBit -= 2; if (pixelsPerBit < 4) pixelsPerBit = 4; }
@@ -102,6 +109,9 @@ void main_loop() {
                     case SDLK_0:
                         frequency = 30.0; amplitude = 100.0; noise_level = 0.0; pixelsPerBit = 50;
                         needsTextUpdate = true; break;
+                    case SDLK_r:
+                        message_offset = 0;
+                        break;
                 }
             }
 
@@ -125,13 +135,22 @@ void main_loop() {
     // --- UPDATE TEXT ---
     if (needsTextUpdate) {
         char buffer_l1[128], buffer_l2[128], buffer_mode[128];
+
+        // Get a string for the current modulation type
+        const char* mod_type_string;
+        switch (current_mod_type) {
+            case MOD_ASK: mod_type_string = "ASK"; break;
+            case MOD_FSK: mod_type_string = "FSK"; break;
+            case MOD_PSK: mod_type_string = "PSK"; break;
+            default:      mod_type_string = "Unknown"; break;
+        }
         snprintf(buffer_l1, sizeof(buffer_l1), "y = %.f * sin(%.1f * x)", amplitude, frequency);
         snprintf(buffer_l2, sizeof(buffer_l2), "Baud (px/bit): %d | Noise: %.2f", pixelsPerBit, noise_level);
         
         if (current_mode == MODE_TYPING) {
             snprintf(buffer_mode, sizeof(buffer_mode), "Mode: Typing (Press ESC for commands)");
         } else {
-            snprintf(buffer_mode, sizeof(buffer_mode), "Mode: Command (Press ESC to type)");
+            snprintf(buffer_mode, sizeof(buffer_mode), "Mode: Command (1:ASK 2:FSK 3:PSK) (Press ESC for typing)");
         }
         
         update_text_object(&status_line1, buffer_l1);
@@ -146,25 +165,58 @@ void main_loop() {
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255); SDL_RenderDrawLine(renderer, 0, SCREEN_HEIGHT / 2, SCREEN_WIDTH, SCREEN_HEIGHT / 2);
 
     int prev_y;
+    double y = 0.0;
+
     for (int x = 0; x < SCREEN_WIDTH; x++) {
-        double low_amplitude = amplitude * 0.1; double current_amplitude = low_amplitude; 
+        int bit_value = 0;
         if (activeMessageLength > 0) {
             int message_length_in_pixels = activeMessageLength * 8 * pixelsPerBit;
             int lookup_x = (x + message_offset) % message_length_in_pixels;
-            int bit_index = lookup_x / pixelsPerBit; int char_index = bit_index / 8;
+            int bit_index = lookup_x / pixelsPerBit; 
+            int char_index = bit_index / 8;
             if (char_index < activeMessageLength) {
-                int bit_in_char = bit_index % 8; int bit_value = (activeMessage[char_index] >> (7 - bit_in_char)) & 1;
+                int bit_in_char = bit_index % 8;
+                bit_value = (activeMessage[char_index] >> (7 - bit_in_char)) & 1;
+            }
+        }
+
+        // --- NEW: Main modulation logic switch ---
+        switch (current_mod_type) {
+            case MOD_ASK: {
+                double low_amplitude = amplitude * 0.1; 
+                double current_amplitude = low_amplitude; 
                 if (bit_value == 1) {
-                    int x_in_bit = lookup_x % pixelsPerBit;
+                    int x_in_bit = (x + message_offset) % pixelsPerBit;
                     double phase_in_bit = ((double)x_in_bit / (double)pixelsPerBit) * M_PI;
                     double pulse_shape_factor = sin(phase_in_bit);
                     current_amplitude = low_amplitude + (amplitude - low_amplitude) * pulse_shape_factor;
                 }
+                double sin_arg = (((double)x * frequency) * M_PI / 180.0);
+                y = current_amplitude * sin(sin_arg);
+                break;
+            }
+
+            case MOD_FSK: {
+                // For FSK, a '0' is a low frequency and a '1' is a high frequency.
+                double freq_mark = frequency; // Frequency for '1'
+                double freq_space = frequency * 2.0; // Frequency for '0'
+                double current_freq = (bit_value == 1) ? freq_mark : freq_space;
+                // Note: Simple FSK has phase discontinuities at bit changes.
+                double sin_arg = (((double)x * current_freq) * M_PI / 180.0);
+                y = amplitude * sin(sin_arg);
+                break;
+            }
+
+            case MOD_PSK: {
+                // For BPSK, a '0' is normal phase, a '1' is inverted phase.
+                double phase_shift = (bit_value == 1) ? M_PI : 0.0;
+                double sin_arg = (((double)x * frequency) * M_PI / 180.0) + phase_shift;
+                y = amplitude * sin(sin_arg);
+                break;
             }
         }
-        double sin_arg = (((double)x * frequency) * M_PI / 180.0);
-        double y = current_amplitude * sin(sin_arg);
-        if (current_amplitude > 0 && noise_level > 0) { y += (rand() % 21 - 10) * noise_level; }
+
+        if (amplitude > 0 && noise_level > 0) { y += (rand() % 21 - 10) * noise_level; }
         int current_y = (SCREEN_HEIGHT / 2) - (int)y;
         if (x > 0) { SDL_RenderDrawLine(renderer, x - 1, prev_y, x, current_y); }
         prev_y = current_y;

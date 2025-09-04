@@ -4,11 +4,16 @@ EMCC = emcc
 CFLAGS = -Wall -Wextra -std=c99 -I/usr/local/include
 LDFLAGS = -L/usr/local/lib -lraylib -lm
 
-# Emscripten specific flags
-EMCC_FLAGS = -s USE_RAYLIB=1 -s ASYNCIFY -s ALLOW_MEMORY_GROWTH --shell-file src/template.html
-# Export the C functions we need to call from JavaScript
-EMCC_FLAGS += -s EXPORTED_FUNCTIONS="['_main', '_open_file_data', '_get_waveform_data_for_saving']"
-EMCC_LDFLAGS =
+# Emscripten specific flags for the web build
+EMCC_FLAGS = \
+	-s USE_WEBGL2=1 \
+	-s ASYNCIFY \
+	-s ALLOW_MEMORY_GROWTH \
+	--shell-file src/template.html \
+	-s EXPORTED_FUNCTIONS="['_main', '_open_file_data', '_get_waveform_data_for_saving']"
+
+# Linker flags for Emscripten (to link raylib)
+EMCC_LDFLAGS = -lraylib
 
 # Source files for native build
 SRC_NATIVE = src/main.c src/text_renderer.c src/tinyfiledialogs.c

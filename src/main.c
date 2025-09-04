@@ -277,7 +277,7 @@ void main_loop() {
             "Enter     -  Modulate Typed Message",
             "Space     -  Pause Message Offset",
             "J / K     -  Decrease / Increase Message Offset",
-            "S         -  Save Waveform as 32fl file"
+            "S         -  Save Waveform as 32fl file",
             NULL
         };
 

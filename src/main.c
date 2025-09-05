@@ -61,27 +61,31 @@ extern void downloadFile(const void* data, int dataSize, const char* filename);
 
 // --- Waveform Export Function (Platform-Dependent) ---
 
+// src/main.c (replace the existing export_waveform function with this)
+
 #ifdef __EMSCRIPTEN__
-// Web version: generate data in memory and pass to JavaScript for download.
+// Web version: generate the full waveform in memory and pass to JavaScript.
 void export_waveform() {
-    float* waveform_data = (float*)malloc(SCREEN_WIDTH * sizeof(float));
+    if (activeMessageLength == 0) {
+        printf("No active message to export.\n");
+        return;
+    }
+
+    // Calculate the total number of samples needed for the entire message.
+    int total_samples = activeMessageLength * 8 * pixelsPerBit;
+
+    float* waveform_data = (float*)malloc(total_samples * sizeof(float));
     if (waveform_data == NULL) {
         printf("Failed to allocate memory for waveform data.\n");
         return;
     }
 
-    for (int x = 0; x < SCREEN_WIDTH; x++) {
-        int bit_value = 0;
-        if (activeMessageLength > 0) {
-            int message_length_in_pixels = activeMessageLength * 8 * pixelsPerBit;
-            int lookup_x = (x + message_offset) % message_length_in_pixels;
-            int bit_index = lookup_x / pixelsPerBit;
-            int char_index = bit_index / 8;
-            if (char_index < activeMessageLength) {
-                int bit_in_char = bit_index % 8;
-                bit_value = (activeMessage[char_index] >> (7 - bit_in_char)) & 1;
-            }
-        }
+    // Loop through the entire message, not just the screen width.
+    for (int x = 0; x < total_samples; x++) {
+        int bit_index = x / pixelsPerBit;
+        int char_index = bit_index / 8;
+        int bit_in_char = bit_index % 8;
+        int bit_value = (activeMessage[char_index] >> (7 - bit_in_char)) & 1;
 
         double y = 0.0;
         switch (current_mod_type) {
@@ -89,7 +93,7 @@ void export_waveform() {
                 double low_amplitude = amplitude * 0.1;
                 double current_amplitude = low_amplitude;
                 if (bit_value == 1) {
-                    int x_in_bit = (x + message_offset) % pixelsPerBit;
+                    int x_in_bit = x % pixelsPerBit;
                     double phase_in_bit = ((double)x_in_bit / (double)pixelsPerBit) * M_PI;
                     double pulse_shape_factor = sin(phase_in_bit);
                     current_amplitude = low_amplitude + (amplitude - low_amplitude) * pulse_shape_factor;
@@ -120,13 +124,18 @@ void export_waveform() {
         waveform_data[x] = (float)y;
     }
 
-    downloadFile(waveform_data, SCREEN_WIDTH * sizeof(float), "waveform.32fl");
+    downloadFile(waveform_data, total_samples * sizeof(float), "waveform.32fl");
     free(waveform_data);
-    printf("Triggering waveform download...\n");
+    printf("Triggering full waveform download...\n");
 }
 #else
-// Native version: use tinyfiledialogs to save to the local filesystem.
+// Native version: use tinyfiledialogs to save the full waveform to the local filesystem.
 void export_waveform() {
+    if (activeMessageLength == 0) {
+        printf("No active message to export.\n");
+        return;
+    }
+
     char const * filterPatterns[1] = { "*.32fl" };
     char const * saveFileName = tinyfd_saveFileDialog(
         "Save Waveform",
@@ -146,18 +155,16 @@ void export_waveform() {
         perror("Error opening file for writing");
         return;
     }
-    for (int x = 0; x < SCREEN_WIDTH; x++) {
-        int bit_value = 0;
-        if (activeMessageLength > 0) {
-            int message_length_in_pixels = activeMessageLength * 8 * pixelsPerBit;
-            int lookup_x = (x + message_offset) % message_length_in_pixels;
-            int bit_index = lookup_x / pixelsPerBit;
-            int char_index = bit_index / 8;
-            if (char_index < activeMessageLength) {
-                int bit_in_char = bit_index % 8;
-                bit_value = (activeMessage[char_index] >> (7 - bit_in_char)) & 1;
-            }
-        }
+
+    // Calculate the total number of samples needed for the entire message.
+    int total_samples = activeMessageLength * 8 * pixelsPerBit;
+
+    // Loop through the entire message, not just the screen width.
+    for (int x = 0; x < total_samples; x++) {
+        int bit_index = x / pixelsPerBit;
+        int char_index = bit_index / 8;
+        int bit_in_char = bit_index % 8;
+        int bit_value = (activeMessage[char_index] >> (7 - bit_in_char)) & 1;
 
         double y = 0.0;
         switch (current_mod_type) {
@@ -165,7 +172,7 @@ void export_waveform() {
                 double low_amplitude = amplitude * 0.1;
                 double current_amplitude = low_amplitude;
                 if (bit_value == 1) {
-                    int x_in_bit = (x + message_offset) % pixelsPerBit;
+                    int x_in_bit = x % pixelsPerBit;
                     double phase_in_bit = ((double)x_in_bit / (double)pixelsPerBit) * M_PI;
                     double pulse_shape_factor = sin(phase_in_bit);
                     current_amplitude = low_amplitude + (amplitude - low_amplitude) * pulse_shape_factor;
@@ -193,13 +200,13 @@ void export_waveform() {
         if (amplitude > 0 && noise_level > 0) {
             y += (rand() % 21 - 10) * noise_level;
         }
-        
+
         float sample = (float)y;
         fwrite(&sample, sizeof(float), 1, outFile);
     }
 
     fclose(outFile);
-    printf("Waveform exported to %s\n", saveFileName);
+    printf("Full waveform exported to %s\n", saveFileName);
 }
 #endif
 

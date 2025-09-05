@@ -12,6 +12,7 @@
 .vscode/
 *.swp
 *~
+*.o
 .DS_Store
 
 !template.html

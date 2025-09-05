@@ -17,6 +17,10 @@ int SCREEN_WIDTH = 1240;
 int SCREEN_HEIGHT = 720;
 #define INPUT_BUFFER_SIZE 256
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 // AppMode
 typedef enum { MODE_TYPING, MODE_COMMAND } AppMode;
 
@@ -49,8 +53,6 @@ char activeMessage[INPUT_BUFFER_SIZE] = {0};
 int activeMessageLength = 0;
 bool quit = false;
 
-
-EMSCRIPTEN_KEEPALIVE
 void export_waveform() {
     char const * filterPatterns[1] = { "*.32fl" };
     char const * saveFileName = tinyfd_saveFileDialog(

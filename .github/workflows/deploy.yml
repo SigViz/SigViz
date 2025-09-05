@@ -16,7 +16,7 @@ jobs:
       - name: Checkout Source Repo
         uses: actions/checkout@v4
 
-      # Step 2: Build the project using the JS library and explicit source files.
+      # Step 2: Build the project using the definitive JS library.
       - name: Build Project
         run: |
           mkdir build
@@ -27,7 +27,7 @@ jobs:
             src/main.c src/text_renderer.c \
             -Wall -s USE_SDL=2 -s USE_SDL_TTF=2 \
             --preload-file assets@assets -s ALLOW_MEMORY_GROWTH \
-            --js-library src/library_web.js \
+            --js-library src/library_final.js \
             --shell-file src/template.html"
 
       # Step 3: Deploy the contents of the 'build' directory.

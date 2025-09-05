@@ -16,21 +16,27 @@ jobs:
       - name: Checkout Source Repo
         uses: actions/checkout@v4
 
-      # Step 2: Build the project using the official Emscripten SDK Docker image.
-      # This image is standardized and will correctly build the raylib port.
+      # Step 2: Set up Emscripten using the reliable Docker method.
+      # The build files will be created in a new 'build' directory.
       - name: Build Project
         run: |
+          mkdir build
           docker run --rm \
             -v $GITHUB_WORKSPACE:/src \
-            -w /src \
-            emscripten/emsdk:latest \
-            make web
+            trzeci/emscripten:sdk-incoming-64bit \
+            bash -c "cd /src && emcc -o build/index.html src/*.c \
+            -Wall -s USE_SDL=2 -s USE_SDL_TTF=2 \
+            --preload-file assets@assets -s ALLOW_MEMORY_GROWTH \
+            --shell-file /src/src/template.html"
 
-      # Step 3: Deploy the built files to your GitHub Pages repository.
+      # Step 3: Deploy the contents of the 'build' directory to your other repository.
+      # This action handles the git clone, commit, and push automatically.
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
+          # The Personal Access Token we created earlier
           personal_token: ${{ secrets.SIGVIZ }}
+          # The repository to push the build results to
           external_repository: SigViz/sigviz.github.io
-          publish_dir: ./
-          keep_files: false
+          # The directory in this repository that contains the built website
+          publish_dir: ./build

@@ -1,51 +1,45 @@
-# Compiler and flags
+# Compiler
 CC = gcc
-EMCC = emcc
-CFLAGS = -Wall -Wextra -std=c99 -I/usr/local/include
-LDFLAGS = -L/usr/local/lib -lraylib -lm
 
-# Emscripten specific flags for the web build
-EMCC_FLAGS = \
-	-DPLATFORM_WEB \
-	-s USE_SDL=2 \
-	-s USE_SDL_TTF=2 \
-	-s USE_WEBGL2=1 \
-	-s USE_GLFW=3 \
-	-s ASYNCIFY \
-	-s ALLOW_MEMORY_GROWTH \
-	--shell-file src/template.html \
-	-s EXPORTED_FUNCTIONS="['_main', '_open_file_data', '_get_waveform_data_for_saving']"
+# Use sdl2-config to get compiler flags (e.g., include paths)
+CFLAGS = -Wall -Wextra -g `sdl2-config --cflags`
 
-# Linker flags for Emscripten (to link raylib)
-EMCC_LDFLAGS = -lraylib
+# Use sdl2-config to get linker flags and add the TTF library
+LDFLAGS = `sdl2-config --libs` -lSDL2_ttf -lm
 
-# Source files for native build
-SRC_NATIVE = src/main.c src/text_renderer.c src/tinyfiledialogs.c
-OBJ = $(SRC_NATIVE:.c=.o)
+# --- Project Structure ---
+SRC_DIR = src
+OBJ_DIR = obj
+BIN_DIR = bin
 
-# Source files for web build (exclude tinyfiledialogs.c)
-SRC_WEB = src/main.c src/text_renderer.c
+# Automatically find all .c files in the src directory
+SOURCES = $(wildcard $(SRC_DIR)/*.c)
 
-# Target executable
-TARGET_NATIVE = sigviz_native
-TARGET_WEB = index.html
+# Create a list of corresponding object files in the obj directory
+OBJECTS = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SOURCES))
 
-# Default target
-all: native
+# Define the final executable name and path
+EXECUTABLE = sine_wave_modulator
+TARGET = $(BIN_DIR)/$(EXECUTABLE)
 
-# Native build
-native: $(OBJ)
-	$(CC) $(OBJ) -o $(TARGET_NATIVE) $(LDFLAGS)
+# --- Rules ---
+all: $(TARGET)
 
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+# Rule to link the final executable
+$(TARGET): $(OBJECTS)
+	@mkdir -p $(BIN_DIR)
+	$(CC) -o $@ $^ $(LDFLAGS)
+	@echo "Build complete: '$@'"
+	cp -r assets $(BIN_DIR)/
 
-# Web build
-web:
-	$(EMCC) $(SRC_WEB) -o $(TARGET_WEB) $(EMCC_FLAGS) $(EMCC_LDFLAGS)
+# Pattern rule to compile any .c file from src into a .o file in obj
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	@mkdir -p $(OBJ_DIR)
+	$(CC) $(CFLAGS) -c -o $@ $<
 
-# Clean up
+# Rule to clean up all generated files
 clean:
-	rm -f $(OBJ) $(TARGET_NATIVE) index.js index.wasm index.html
+	@echo "Cleaning up..."
+	rm -rf $(OBJ_DIR) $(BIN_DIR)
 
-.PHONY: all native web clean
+.PHONY: all clean

@@ -16,18 +16,19 @@ jobs:
       - name: Checkout Source Repo
         uses: actions/checkout@v4
 
-      # Step 2: Build the project with the JavaScript helper included.
+      # Step 2: Build the project, explicitly listing source files.
       - name: Build Project
         run: |
           mkdir build
           docker run --rm \
             -v $GITHUB_WORKSPACE:/src \
             trzeci/emscripten:sdk-incoming-64bit \
-            bash -c "cd /src && emcc -o build/index.html src/*.c \
+            bash -c "cd /src && emcc -o build/index.html \
+            src/main.c src/text_renderer.c \
             -Wall -s USE_SDL=2 -s USE_SDL_TTF=2 \
             --preload-file assets@assets -s ALLOW_MEMORY_GROWTH \
-            --pre-js /src/src/pre.js \
-            --shell-file /src/src/template.html"
+            --pre-js src/pre.js \
+            --shell-file src/template.html"
 
       # Step 3: Deploy the contents of the 'build' directory.
       - name: Deploy to GitHub Pages

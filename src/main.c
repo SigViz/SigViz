@@ -11,7 +11,9 @@
 #include <stdlib.h>
 #include <SDL2/SDL.h>
 #include "text_renderer.h"
+#ifndef __EMSCRIPTEN__
 #include "tinyfiledialogs.h"
+#endif
 
 int SCREEN_WIDTH = 1240;
 int SCREEN_HEIGHT = 720;

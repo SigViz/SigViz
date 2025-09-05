@@ -16,8 +16,7 @@ jobs:
       - name: Checkout Source Repo
         uses: actions/checkout@v4
 
-      # Step 2: Set up Emscripten using the reliable Docker method.
-      # The build files will be created in a new 'build' directory.
+      # Step 2: Build the project with the JavaScript helper included.
       - name: Build Project
         run: |
           mkdir build
@@ -27,14 +26,14 @@ jobs:
             bash -c "cd /src && emcc -o build/index.html src/*.c \
             -Wall -s USE_SDL=2 -s USE_SDL_TTF=2 \
             --preload-file assets@assets -s ALLOW_MEMORY_GROWTH \
+            --pre-js /src/src/pre.js \
             --shell-file /src/src/template.html"
 
-      # Step 3: Deploy the contents of the 'build' directory to your other repository.
-      # This action handles the git clone, commit, and push automatically.
+      # Step 3: Deploy the contents of the 'build' directory.
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
-          # The Personal Access Token we created earlier
+          # The Personal Access Token for the target repository
           personal_token: ${{ secrets.SIGVIZ }}
           # The repository to push the build results to
           external_repository: SigViz/sigviz.github.io

@@ -371,7 +371,7 @@ void main_loop() {
             "N/Shift+N - Decrease/Increase SNR",
             "B/Shift+B - Decrease/Increase Roll-off Factor",
             "P/Shift+P - Decrease/Increase Pixels per Bit",
-            "F/Shift+F - Decrease/Increase Sampling Rate",
+            "F/Shift+F - Decrease/Increase Sampling Rate (CANNOT CHANGE FOR THE TIME BEING)",
             "J/L       - Scroll Left/Right through Signal",
             "R         - Reset Scroll to Start",
             "Space     - Pause/Resume Scrolling",

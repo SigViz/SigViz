@@ -130,7 +130,6 @@ void export_waveform() {
         double time = (double)x * 0.01;
         double y = 0.0;
 
-        // NOTE: This logic is a mirror of the main drawing loop for consistency
         switch (current_mod_type) {
             case MOD_ASK: {
                 double base_amplitude = 0.0;
@@ -288,13 +287,8 @@ void main_loop() {
                             printf("Switched to Time Domain view.\n");
                             break;
                         case SDLK_2:
-                            // I/Q plot is only meaningful for PSK/QAM
-                            if (current_mod_type == MOD_PSK) {
-                                current_view = VIEW_IQ_PLOT;
-                                printf("Switched to I/Q Plot view.\n");
-                            } else {
-                                printf("I/Q Plot is only available for PSK modulation.\n");
-                            }
+                            current_view = VIEW_IQ_PLOT;
+                            printf("Switched to I/Q Plot view.\n");
                             break;
                     }
                 }
@@ -420,7 +414,6 @@ void main_loop() {
                     break;
                 }
                 case MOD_FSK: {
-                    int M = 1 << bitsPerSymbol;
                     int symbol_index = (int)(current_time / symbol_period_seconds);
                     int symbol_value = get_symbol_at_index(symbol_index, activeMessage, activeMessageLength, bitsPerSymbol);
                     
@@ -487,10 +480,28 @@ void main_loop() {
 
             for (int i = 0; i < total_symbols; ++i) {
                 int symbol_value = get_symbol_at_index(i, activeMessage, activeMessageLength, bitsPerSymbol);
-                double angle = (2.0 * M_PI * symbol_value) / M;
-                if (M == 4) angle += M_PI / 4.0;
-                double ideal_I = cos(angle);
-                double ideal_Q = sin(angle);
+                double ideal_I = 0.0, ideal_Q = 0.0; // Declare I and Q
+
+                switch (current_mod_type) {
+                    case MOD_ASK: {
+                        ideal_I = (M == 1) ? symbol_value : (double)symbol_value / (M - 1);
+                        ideal_Q = 0.0; // Q is always zero for ASK
+                        break;
+                    }
+                    case MOD_PSK: {
+                        double angle = (2.0 * M_PI * symbol_value) / M;
+                        if (M == 4) angle += M_PI / 4.0;
+                        ideal_I = cos(angle);
+                        ideal_Q = sin(angle);
+                        break;
+                    }
+                    case MOD_FSK: {
+                        double angle = (2.0 * M_PI * symbol_value) / M;
+                        ideal_I = cos(angle);
+                        ideal_Q = sin(angle);
+                        break;
+                    }
+                }
 
                 double noise_I = 0.0, noise_Q = 0.0;
                 if (snr_db < 100) {

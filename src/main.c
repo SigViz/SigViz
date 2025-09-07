@@ -24,7 +24,7 @@
 
 typedef enum { MODE_TYPING, MODE_COMMAND } AppMode;
 typedef enum { MOD_ASK, MOD_FSK, MOD_PSK } ModulationType;
-typedef enum { VIEW_TIME_DOMAIN, VIEW_IQ_PLOT } ViewMode;
+typedef enum { VIEW_TIME_DOMAIN, VIEW_IQ_PLOT , VIEW_POWER_SPECTRUM } ViewMode;
 
 // --- Global Variables ---
 SDL_Window* window = NULL;
@@ -275,6 +275,10 @@ void main_loop() {
                         needsTextUpdate = true; break;
                     case SDLK_r: time_offset = 0; break; 
                     case SDLK_s: export_waveform(); break;
+                    // case SDLK_f:
+                    //     if (e.key.keysym.mod & KMOD_SHIFT) { sampling_rate += 100; } else { sampling_rate -= 100; }
+                    //     if (bitsPerSymbol < 100) { bitsPerSymbol = 100; }
+                    //     needsTextUpdate = true; break;
                 }
             }
 
@@ -288,6 +292,10 @@ void main_loop() {
                         case SDLK_2:
                             current_view = VIEW_IQ_PLOT;
                             printf("Switched to I/Q Plot view.\n");
+                            break;
+                        case SDLK_3:
+                            current_view = VIEW_POWER_SPECTRUM;
+                            printf("Currently no Power Spectrum Implemented\n");
                             break;
                     }
                 }
@@ -314,12 +322,10 @@ void main_loop() {
         const char* mod_str = (current_mod_type == MOD_ASK) ? "ASK" : (current_mod_type == MOD_FSK) ? "FSK" : "PSK";
         
         char psk_order_str[16] = "";
-        if (current_mod_type == MOD_PSK) {
-            sprintf(psk_order_str, " (%d-PSK)", 1 << bitsPerSymbol);
-        }
+        sprintf(psk_order_str, " (%d-%s)", 1 << bitsPerSymbol, mod_str);
 
         snprintf(buffer_l1, sizeof(buffer_l1), "A:%.0f F:%.1f %s%s", amplitude, frequency, mod_str, psk_order_str);
-        snprintf(buffer_l2, sizeof(buffer_l2), "px/bit:%d SNR:%.0fdB Roll-off:%.2f", pixelsPerBit, snr_db, rolloff_factor);
+        snprintf(buffer_l2, sizeof(buffer_l2), "px/bit:%d SNR:%.0fdB Roll-off:%.2f, Sampling rate:%.f Hz", pixelsPerBit, snr_db, rolloff_factor, sampling_rate);
         snprintf(buffer_mode, sizeof(buffer_mode), "Mode: %s (TAB to switch)", current_mode == MODE_TYPING ? "Typing" : "Command");
 
         update_text_object(&status_line1, buffer_l1);
@@ -346,11 +352,13 @@ void main_loop() {
             "TAB       - Toggle Typing/Command Mode",
             "H         - Toggle this Help Screen",
             "1,2,3     - Switch Modulation (ASK, FSK, PSK)",
+            "1,2,3     - Switch View (Time Domain, IQ Plot, Power Spectrum)",
             "Arrows    - Adjust Amplitude & Frequency",
             "M/Shift+M - Decrease/Increase PSK Order (BPSK, QPSK...)",
             "N/Shift+N - Decrease/Increase SNR",
             "B/Shift+B - Decrease/Increase Roll-off Factor",
             "P/Shift+P - Decrease/Increase Pixels per Bit",
+            "F/Shift+F - Decrease/Increase Sampling Rate",
             "J/L       - Scroll Left/Right through Signal",
             "R         - Reset Scroll to Start",
             "Space     - Pause/Resume Scrolling",
@@ -521,7 +529,7 @@ void main_loop() {
                     SDL_RenderDrawLine(renderer, prev_x_pos, prev_y_pos, x_pos, y_pos);
                 }
 
-                SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+                SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
                 SDL_Rect point_rect = {x_pos - 2, y_pos - 2, 5, 5};
                 SDL_RenderFillRect(renderer, &point_rect);
 

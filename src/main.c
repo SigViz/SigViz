@@ -252,7 +252,7 @@ void main_loop() {
                     case SDLK_3: current_mod_type = MOD_PSK; needsTextUpdate = true; break;
                     case SDLK_b:
                         if (e.key.keysym.mod & KMOD_SHIFT) { rolloff_factor += 0.05; } else { rolloff_factor -= 0.05; }
-                        if (rolloff_factor > 1.0) { rolloff_factor = 1.0; } // Use braces or separate lines
+                        if (rolloff_factor > 1.0) { rolloff_factor = 1.0; }
                         if (rolloff_factor < 0.0) { rolloff_factor = 0.0; }
                         needsTextUpdate = true; break;
                     case SDLK_n:
@@ -260,7 +260,6 @@ void main_loop() {
                         needsTextUpdate = true; break;
                     case SDLK_m:
                         if (e.key.keysym.mod & KMOD_SHIFT) { bitsPerSymbol++; } else { bitsPerSymbol--; }
-                        if (bitsPerSymbol > 4) { bitsPerSymbol = 4; } // Use braces or separate lines
                         if (bitsPerSymbol < 1) { bitsPerSymbol = 1; }
                         needsTextUpdate = true; break;
                     case SDLK_p:
@@ -268,11 +267,11 @@ void main_loop() {
                         if (pixelsPerBit < 4) pixelsPerBit = 4;
                         needsTextUpdate = true; break;
                     case SDLK_SPACE: needsAngleUpdate = !needsAngleUpdate; break;
-                    case SDLK_j: time_offset -= 0.1; if (time_offset < 0) { time_offset = 0; } break; // Use time_offset
+                    case SDLK_j: time_offset -= 0.1; if (time_offset < 0) { time_offset = 0; } break;
                     case SDLK_l: time_offset += 0.1; break;   
                     case SDLK_0:
                         frequency = 30.0; amplitude = 100.0; snr_db = 100.0; pixelsPerBit = 50;
-                        rolloff_factor = 0.35; bitsPerSymbol = 1; time_offset = 0.0; // Use time_offset
+                        rolloff_factor = 0.35; bitsPerSymbol = 1; time_offset = 0.0;
                         needsTextUpdate = true; break;
                     case SDLK_r: time_offset = 0; break; 
                     case SDLK_s: export_waveform(); break;
@@ -478,6 +477,9 @@ void main_loop() {
             int M = 1 << bitsPerSymbol;
             int total_symbols = (activeMessageLength * 8) / bitsPerSymbol;
 
+            int prev_x_pos = SCREEN_WIDTH / 2;
+            int prev_y_pos = SCREEN_HEIGHT / 2;
+
             for (int i = 0; i < total_symbols; ++i) {
                 int symbol_value = get_symbol_at_index(i, activeMessage, activeMessageLength, bitsPerSymbol);
                 double ideal_I = 0.0, ideal_Q = 0.0; // Declare I and Q
@@ -504,21 +506,27 @@ void main_loop() {
                 }
 
                 double noise_I = 0.0, noise_Q = 0.0;
-                if (snr_db < 100) {
-                    double snr_linear = pow(10.0, snr_db / 10.0);
-                    double noise_power_per_channel = 0.5 / snr_linear;
-                    double noise_std_dev = sqrt(noise_power_per_channel);
-                    noise_I = ((rand() / (double)RAND_MAX) - 0.5 + (rand() / (double)RAND_MAX) - 0.5) * noise_std_dev * 4.0;
-                    noise_Q = ((rand() / (double)RAND_MAX) - 0.5 + (rand() / (double)RAND_MAX) - 0.5) * noise_std_dev * 4.0;
-                }
+                double snr_linear = pow(10.0, snr_db / 10.0);
+                double noise_power_per_channel = 0.5 / snr_linear;
+                double noise_std_dev = sqrt(noise_power_per_channel);
+                noise_I = ((rand() / (double)RAND_MAX) - 0.5 + (rand() / (double)RAND_MAX) - 0.5) * noise_std_dev * 4.0;
+                noise_Q = ((rand() / (double)RAND_MAX) - 0.5 + (rand() / (double)RAND_MAX) - 0.5) * noise_std_dev * 4.0;
 
                 float plot_scale = SCREEN_HEIGHT / 3.0;
                 int x_pos = SCREEN_WIDTH / 2 + (int)((ideal_I + noise_I) * plot_scale);
                 int y_pos = SCREEN_HEIGHT / 2 - (int)((ideal_Q + noise_Q) * plot_scale);
 
+                if (i > 0) { // Don't draw a line for the very first point
+                    SDL_SetRenderDrawColor(renderer, 0, 150, 255, 100); // A blue, semi-transparent line
+                    SDL_RenderDrawLine(renderer, prev_x_pos, prev_y_pos, x_pos, y_pos);
+                }
+
                 SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
                 SDL_Rect point_rect = {x_pos - 2, y_pos - 2, 5, 5};
                 SDL_RenderFillRect(renderer, &point_rect);
+
+                prev_x_pos = x_pos;
+                prev_y_pos = y_pos;
             }
         }
     } // End view check

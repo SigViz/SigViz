@@ -117,45 +117,59 @@ void export_waveform() {
         return;
     }
 
-    int total_samples = activeMessageLength * 8 * pixelsPerBit;
+    // --- 1. Calculate total samples based on time and sampling rate ---
+    double symbol_period_seconds = (double)pixelsPerBit / sampling_rate;
+    int total_symbols = (activeMessageLength * 8) / bitsPerSymbol;
+    // Ensure we have at least one symbol's worth of samples
+    if (total_symbols == 0 && activeMessageLength > 0) total_symbols = 1;
+    int total_samples = (int)(total_symbols * symbol_period_seconds * sampling_rate);
+
+    if (total_samples <= 0) {
+        printf("No samples to export.\n");
+        return;
+    }
+
     float* waveform_data = (float*)malloc(total_samples * sizeof(float));
     if (waveform_data == NULL) {
         printf("Failed to allocate memory for waveform data.\n");
         return;
     }
 
-    double phase = 0.0; // For FSK
+    double phase = 0.0; // For FSK phase accumulation
 
-    for (int x = 0; x < total_samples; x++) {
-        double time = (double)x * 0.01;
+    // --- 2. Loop through every sample of the entire message ---
+    for (int i = 0; i < total_samples; i++) {
+        double current_time = (double)i / sampling_rate;
         double y = 0.0;
 
+        // --- 3. Use the exact same signal generation logic as the drawing loop ---
         switch (current_mod_type) {
             case MOD_ASK: {
-                double base_amplitude = 0.0;
-                int current_symbol_index = (x / pixelsPerBit);
-                for (int i = -2; i <= 2; ++i) {
-                    int symbol_index = current_symbol_index + i;
-                    if (symbol_index < 0) continue;
-                    int bit_value = get_symbol_at_index(symbol_index, activeMessage, activeMessageLength, 1);
-                    if (bit_value == 1) {
-                        double time_in_sample = x % pixelsPerBit;
-                        double symbol_center_offset = i * pixelsPerBit;
-                        double time_from_center = time_in_sample - symbol_center_offset;
-                        base_amplitude += raised_cosine(time_from_center, pixelsPerBit, rolloff_factor);
-                    }
+                double shaped_envelope = 0.0;
+                int M = 1 << bitsPerSymbol;
+                int current_symbol_index = (int)(current_time / symbol_period_seconds);
+
+                for (int j = -4; j <= 4; ++j) {
+                    int symbol_index = current_symbol_index + j;
+                    if (symbol_index < 0 || symbol_index >= total_symbols) continue;
+                    int symbol_value = get_symbol_at_index(symbol_index, activeMessage, activeMessageLength, bitsPerSymbol);
+                    double impulse_value = (M == 1) ? symbol_value : (double)symbol_value / (M - 1);
+                    double symbol_center_time = (symbol_index + 0.5) * symbol_period_seconds;
+                    double time_from_center = current_time - symbol_center_time;
+                    double filter_kernel_value = raised_cosine(time_from_center, symbol_period_seconds, rolloff_factor);
+                    shaped_envelope += impulse_value * filter_kernel_value;
                 }
-                double current_amplitude = amplitude * (0.1 + 0.9 * base_amplitude);
-                y = current_amplitude * sin(2.0 * M_PI * frequency * time);
+                double current_amplitude = amplitude * shaped_envelope;
+                y = current_amplitude * sin(2.0 * M_PI * frequency * current_time);
                 break;
             }
             case MOD_FSK: {
-                int bit_index = x / pixelsPerBit;
-                int bit_value = get_symbol_at_index(bit_index, activeMessage, activeMessageLength, 1);
-                double freq_mark = frequency;
-                double freq_space = frequency * 2.0;
-                double current_freq = (bit_value == 1) ? freq_mark : freq_space;
-                double phase_increment = 2.0 * M_PI * current_freq * 0.01;
+                int symbol_index = (int)(current_time / symbol_period_seconds);
+                if (symbol_index >= total_symbols) symbol_index = total_symbols - 1;
+                int symbol_value = get_symbol_at_index(symbol_index, activeMessage, activeMessageLength, bitsPerSymbol);
+                double frequency_separation = frequency / 2.0;
+                double current_freq = frequency + (symbol_value * frequency_separation);
+                double phase_increment = 2.0 * M_PI * current_freq / sampling_rate;
                 phase += phase_increment;
                 y = amplitude * sin(phase);
                 break;
@@ -163,42 +177,37 @@ void export_waveform() {
             case MOD_PSK: {
                 double shaped_I = 0.0, shaped_Q = 0.0;
                 int M = 1 << bitsPerSymbol;
-                int current_symbol_index = (x / pixelsPerBit);
-                for (int i = -2; i <= 2; ++i) {
-                    int symbol_index = current_symbol_index + i;
-                    if (symbol_index < 0) continue;
+                int current_symbol_index = (int)(current_time / symbol_period_seconds);
+
+                for (int j = -4; j <= 4; ++j) {
+                    int symbol_index = current_symbol_index + j;
+                    if (symbol_index < 0 || symbol_index >= total_symbols) continue;
                     int symbol_value = get_symbol_at_index(symbol_index, activeMessage, activeMessageLength, bitsPerSymbol);
                     double angle = (2.0 * M_PI * symbol_value) / M;
                     if (M == 4) angle += M_PI / 4.0;
-                    double current_I = cos(angle);
-                    double current_Q = sin(angle);
-                    double time_in_sample = x % pixelsPerBit;
-                    double symbol_center_offset = i * pixelsPerBit;
-                    double time_from_center = time_in_sample - symbol_center_offset;
-                    double pulse_shape_value = raised_cosine(time_from_center, pixelsPerBit, rolloff_factor);
-                    shaped_I += current_I * pulse_shape_value;
-                    shaped_Q += current_Q * pulse_shape_value;
+                    double impulse_I = cos(angle);
+                    double impulse_Q = sin(angle);
+                    double symbol_center_time = (symbol_index + 0.5) * symbol_period_seconds;
+                    double time_from_center = current_time - symbol_center_time;
+                    double filter_kernel_value = raised_cosine(time_from_center, symbol_period_seconds, rolloff_factor);
+                    shaped_I += impulse_I * filter_kernel_value;
+                    shaped_Q += impulse_Q * filter_kernel_value;
                 }
-                double carrier_phase = 2.0 * M_PI * frequency * time;
+                double carrier_phase = 2.0 * M_PI * frequency * current_time;
                 y = amplitude * (shaped_I * cos(carrier_phase) - shaped_Q * sin(carrier_phase));
                 break;
             }
         }
 
-        if (amplitude > 0 && snr_db < 100) {
-            double signal_power = (amplitude * amplitude) / 2.0;
-            double snr_linear = pow(10.0, snr_db / 10.0);
-            double noise_power = signal_power / snr_linear;
-            double noise_amplitude_scaler = sqrt(3.0 * noise_power);
-            double noise_sample = (2.0 * (rand() / (double)RAND_MAX) - 1.0) * noise_amplitude_scaler;
-            y += noise_sample;
-        }
-        waveform_data[x] = (float)y;
+        // Note: Noise is intentionally omitted from the export to save an ideal, clean signal.
+        
+        waveform_data[i] = (float)y;
     }
 
+    // --- 4. Platform-specific file saving logic ---
 #ifdef __EMSCRIPTEN__
     downloadFile(waveform_data, total_samples * sizeof(float), "waveform.32fl");
-    printf("Triggering full waveform download...\n");
+    printf("Triggering waveform download...\n");
 #else
     char const * filterPatterns[1] = { "*.32fl" };
     char const * saveFileName = tinyfd_saveFileDialog("Save Waveform", "waveform.32fl", 1, filterPatterns, "32-bit Float Waveform");
@@ -207,7 +216,7 @@ void export_waveform() {
         if (outFile) {
             fwrite(waveform_data, sizeof(float), total_samples, outFile);
             fclose(outFile);
-            printf("Full waveform exported to %s\n", saveFileName);
+            printf("Waveform exported to %s\n", saveFileName);
         } else {
             perror("Error opening file for writing");
         }

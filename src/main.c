@@ -320,11 +320,24 @@ void main_loop() {
     if (needsTextUpdate) {
         char buffer_l1[256], buffer_l2[256], buffer_mode[256];
         const char* mod_str = (current_mod_type == MOD_ASK) ? "ASK" : (current_mod_type == MOD_FSK) ? "FSK" : "PSK";
-        
-        char psk_order_str[16] = "";
-        sprintf(psk_order_str, " (%d-%s)", 1 << bitsPerSymbol, mod_str);
 
-        snprintf(buffer_l1, sizeof(buffer_l1), "A:%.0f F:%.1f %s%s", amplitude, frequency, mod_str, psk_order_str);
+        char psk_order_str[16] = "";
+        int mod_ord = 1 << bitsPerSymbol;
+        sprintf(psk_order_str, " (%d-%s)", mod_ord, mod_str);
+        if (current_mod_type == MOD_PSK) {
+            switch (mod_ord) {
+                case 2:
+                    sprintf(psk_order_str, " (%s)", "BPSK");
+                    break;
+                case 4:
+                    sprintf(psk_order_str, " (%s)", "QPSK");
+                    break;
+                default:
+                    break;
+            }
+        }
+        
+        snprintf(buffer_l1, sizeof(buffer_l1), "A:%.0f F:%.1f %s", amplitude, frequency, psk_order_str);
         snprintf(buffer_l2, sizeof(buffer_l2), "px/bit:%d SNR:%.0fdB Roll-off:%.2f, Sampling rate:%.f Hz", pixelsPerBit, snr_db, rolloff_factor, sampling_rate);
         snprintf(buffer_mode, sizeof(buffer_mode), "Mode: %s (TAB to switch)", current_mode == MODE_TYPING ? "Typing" : "Command");
 
@@ -352,7 +365,7 @@ void main_loop() {
             "TAB       - Toggle Typing/Command Mode",
             "H         - Toggle this Help Screen",
             "1,2,3     - Switch Modulation (ASK, FSK, PSK)",
-            "1,2,3     - Switch View (Time Domain, IQ Plot, Power Spectrum)",
+            "CTRL + 1,2,3     - Switch View (Time Domain, IQ Plot, Power Spectrum)",
             "Arrows    - Adjust Amplitude & Frequency",
             "M/Shift+M - Decrease/Increase PSK Order (BPSK, QPSK...)",
             "N/Shift+N - Decrease/Increase SNR",

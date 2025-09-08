@@ -52,7 +52,7 @@ web:
 	docker run --rm -v $(CURDIR):/src trzeci/emscripten:sdk-incoming-64bit \
 		sh -c "emcc \
 			-Wall \
-			$(shell find $(SRC_DIR) -name '*.c') \
+			$(shell find $(SRC_DIR) -name '*.c' | sed 's|^|/src/|') \
 			-D__EMSCRIPTEN__ \
 			--preload-file assets \
 			--js-library src/library_save_file.js \

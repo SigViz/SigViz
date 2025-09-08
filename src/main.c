@@ -1,52 +1,41 @@
-// src/main.c (Corrected and Final Version)
-
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
 #endif
 
 #include <stdio.h>
-#include <math.h>
-#include <stdbool.h>
 #include <string.h>
-#include <stdlib.h>
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_ttf.h>
+#include <stdbool.h>
+
+#include "shared.h"
 #include "text_renderer.h"
+#include "time_domain.h"
+#include "iq_plot.h"
+#include "fft.h"
+
 #ifndef __EMSCRIPTEN__
 #include "tinyfiledialogs.h"
 #endif
 
-// --- Defines and Enums ---
 #define INPUT_BUFFER_SIZE 256
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
-typedef enum { MODE_TYPING, MODE_COMMAND } AppMode;
-typedef enum { MOD_ASK, MOD_FSK, MOD_PSK } ModulationType;
-typedef enum { VIEW_TIME_DOMAIN, VIEW_IQ_PLOT , VIEW_POWER_SPECTRUM } ViewMode;
-
-// --- Global Variables ---
-SDL_Window* window = NULL;
-SDL_Renderer* renderer = NULL;
-TextObject status_line1, status_line2, mode_indicator_text, input_text_display, help_prompt_text;
-TTF_Font* font_size_20 = NULL;
-TTF_Font* font_size_18 = NULL;
-
-// Screen and Signal Parameters
+// --- Global Variable Definitions ---
+// The actual variables are defined here, once. The 'extern' keyword in
+// shared.h makes them accessible to other files.
 int SCREEN_WIDTH = 1240;
 int SCREEN_HEIGHT = 720;
 double amplitude = 100.0;
 double frequency = 300.0;
 int pixelsPerBit = 50;
-double snr_db = 100.0; // High SNR = low noise. Set to 100 for "off"
+double snr_db = 100.0;
 double rolloff_factor = 0.35;
-int bitsPerSymbol = 1; // 1=BPSK, 2=QPSK, 3=8PSK, etc.
-double time_offset = 0.0; // Time in seconds to shift the signal
+int bitsPerSymbol = 1;
+double time_offset = 0.0;
 double sampling_rate = 4000.0;
 double pixels_per_second = 500.0;
 
-// App State
 AppMode current_mode = MODE_TYPING;
 ModulationType current_mod_type = MOD_ASK;
 ViewMode current_view = VIEW_TIME_DOMAIN;
@@ -55,60 +44,20 @@ bool needsAngleUpdate = true;
 bool showHelpScreen = false;
 bool quit = false;
 
-// Text Buffers
 char inputText[INPUT_BUFFER_SIZE] = {0};
 int inputTextLength = 0;
 char activeMessage[INPUT_BUFFER_SIZE] = {0};
 int activeMessageLength = 0;
 
+SDL_Window* window = NULL;
+SDL_Renderer* renderer = NULL;
+TextObject status_line1, status_line2, mode_indicator_text, input_text_display, help_prompt_text;
+TTF_Font* font_size_20 = NULL;
+TTF_Font* font_size_18 = NULL;
+
 #ifdef __EMSCRIPTEN__
 extern void downloadFile(const void* data, int dataSize, const char* filename);
 #endif
-
-// --- Helper Functions ---
-
-// Sinc function: sin(pi*x) / (pi*x)
-double sinc(double x) {
-    if (fabs(x) < 1e-9) {
-        return 1.0; // Limit of sinc(x) as x -> 0 is 1.0
-    }
-    return sin(M_PI * x) / (M_PI * x);
-}
-
-// Raised Cosine pulse shaping function
-double raised_cosine(double t, double T_s, double beta) {
-    if (fabs(t) > 2 * T_s) return 0; // Optimization
-
-    if (fabs(t) < 1e-9) {
-        return 1.0;
-    }
-
-    if (beta > 1e-9 && fabs(fabs(2.0 * beta * t / T_s) - 1.0) < 1e-9) {
-        return M_PI / 4.0 * sinc(1.0 / (2.0 * beta));
-    }
-
-    double term1 = sin(M_PI * t / T_s) / (M_PI * t / T_s);
-    double term2 = cos(M_PI * beta * t / T_s) / (1.0 - pow(2.0 * beta * t / T_s, 2.0));
-    return term1 * term2;
-}
-
-// Fetches the integer value of a symbol from the message buffer
-int get_symbol_at_index(int symbol_index, const char* message, int message_len, int bits_per_sym) {
-    int start_bit_index = symbol_index * bits_per_sym;
-    if ((start_bit_index / 8) >= message_len) return 0;
-
-    int symbol_value = 0;
-    for (int i = 0; i < bits_per_sym; ++i) {
-        int current_bit_index = start_bit_index + i;
-        int char_index = current_bit_index / 8;
-        if (char_index >= message_len) continue;
-
-        int bit_in_char = current_bit_index % 8;
-        int bit = (message[char_index] >> (7 - bit_in_char)) & 1;
-        symbol_value = (symbol_value << 1) | bit;
-    }
-    return symbol_value;
-}
 
 // --- Waveform Export Function ---
 void export_waveform() {
@@ -117,10 +66,8 @@ void export_waveform() {
         return;
     }
 
-    // --- 1. Calculate total samples based on time and sampling rate ---
     double symbol_period_seconds = (double)pixelsPerBit / sampling_rate;
     int total_symbols = (activeMessageLength * 8) / bitsPerSymbol;
-    // Ensure we have at least one symbol's worth of samples
     if (total_symbols == 0 && activeMessageLength > 0) total_symbols = 1;
     int total_samples = (int)(total_symbols * symbol_period_seconds * sampling_rate);
 
@@ -135,20 +82,17 @@ void export_waveform() {
         return;
     }
 
-    double phase = 0.0; // For FSK phase accumulation
+    double phase = 0.0;
 
-    // --- 2. Loop through every sample of the entire message ---
     for (int i = 0; i < total_samples; i++) {
         double current_time = (double)i / sampling_rate;
         double y = 0.0;
 
-        // --- 3. Use the exact same signal generation logic as the drawing loop ---
         switch (current_mod_type) {
             case MOD_ASK: {
                 double shaped_envelope = 0.0;
                 int M = 1 << bitsPerSymbol;
                 int current_symbol_index = (int)(current_time / symbol_period_seconds);
-
                 for (int j = -4; j <= 4; ++j) {
                     int symbol_index = current_symbol_index + j;
                     if (symbol_index < 0 || symbol_index >= total_symbols) continue;
@@ -178,7 +122,6 @@ void export_waveform() {
                 double shaped_I = 0.0, shaped_Q = 0.0;
                 int M = 1 << bitsPerSymbol;
                 int current_symbol_index = (int)(current_time / symbol_period_seconds);
-
                 for (int j = -4; j <= 4; ++j) {
                     int symbol_index = current_symbol_index + j;
                     if (symbol_index < 0 || symbol_index >= total_symbols) continue;
@@ -198,16 +141,11 @@ void export_waveform() {
                 break;
             }
         }
-
-        // Note: Noise is intentionally omitted from the export to save an ideal, clean signal.
-        
         waveform_data[i] = (float)y;
     }
 
-    // --- 4. Platform-specific file saving logic ---
 #ifdef __EMSCRIPTEN__
     downloadFile(waveform_data, total_samples * sizeof(float), "waveform.32fl");
-    printf("Triggering waveform download...\n");
 #else
     char const * filterPatterns[1] = { "*.32fl" };
     char const * saveFileName = tinyfd_saveFileDialog("Save Waveform", "waveform.32fl", 1, filterPatterns, "32-bit Float Waveform");
@@ -216,16 +154,12 @@ void export_waveform() {
         if (outFile) {
             fwrite(waveform_data, sizeof(float), total_samples, outFile);
             fclose(outFile);
-            printf("Waveform exported to %s\n", saveFileName);
-        } else {
-            perror("Error opening file for writing");
         }
-    } else {
-        printf("Save file dialog cancelled.\n");
     }
 #endif
     free(waveform_data);
 }
+
 
 // --- Main Loop Function ---
 void main_loop() {
@@ -235,9 +169,7 @@ void main_loop() {
             SDL_GetRendererOutputSize(renderer, &SCREEN_WIDTH, &SCREEN_HEIGHT);
             needsTextUpdate = true;
         }
-
         if (e.type == SDL_QUIT) { quit = true; }
-
         if (e.type == SDL_TEXTINPUT && current_mode == MODE_TYPING) {
             if (inputTextLength < INPUT_BUFFER_SIZE - 1) {
                 strcat(inputText, e.text.text);
@@ -245,15 +177,19 @@ void main_loop() {
                 needsTextUpdate = true;
             }
         }
-
         if (e.type == SDL_KEYDOWN) {
             if (e.key.keysym.sym == SDLK_TAB && !showHelpScreen) {
                 current_mode = (current_mode == MODE_TYPING) ? MODE_COMMAND : MODE_TYPING;
                 if (current_mode == MODE_TYPING) SDL_StartTextInput(); else SDL_StopTextInput();
                 needsTextUpdate = true;
             }
-
-            if (current_mode == MODE_COMMAND && !(e.key.keysym.mod & KMOD_CTRL)) {
+            if (e.key.keysym.mod & KMOD_CTRL) {
+                switch (e.key.keysym.sym) {
+                    case SDLK_1: current_view = VIEW_TIME_DOMAIN; needsTextUpdate = true; break;
+                    case SDLK_2: current_view = VIEW_IQ_PLOT; needsTextUpdate = true; break;
+                    case SDLK_3: current_view = VIEW_POWER_SPECTRUM; needsTextUpdate = true; break;
+                }
+            } else if (current_mode == MODE_COMMAND) {
                 switch (e.key.keysym.sym) {
                     case SDLK_h: showHelpScreen = !showHelpScreen; needsTextUpdate = true; break;
                     case SDLK_1: current_mod_type = MOD_ASK; needsTextUpdate = true; break;
@@ -261,63 +197,41 @@ void main_loop() {
                     case SDLK_3: current_mod_type = MOD_PSK; needsTextUpdate = true; break;
                     case SDLK_b:
                         if (e.key.keysym.mod & KMOD_SHIFT) { rolloff_factor += 0.05; } else { rolloff_factor -= 0.05; }
-                        if (rolloff_factor > 1.0) { rolloff_factor = 1.0; }
-                        if (rolloff_factor < 0.0) { rolloff_factor = 0.0; }
+                        if (rolloff_factor > 1.0) rolloff_factor = 1.0;
+                        if (rolloff_factor < 0.0) rolloff_factor = 0.0;
                         needsTextUpdate = true; break;
                     case SDLK_n:
                         if (e.key.keysym.mod & KMOD_SHIFT) { snr_db += 1.0; } else { snr_db -= 1.0; }
                         needsTextUpdate = true; break;
                     case SDLK_m:
                         if (e.key.keysym.mod & KMOD_SHIFT) { bitsPerSymbol++; } else { bitsPerSymbol--; }
-                        if (bitsPerSymbol < 1) { bitsPerSymbol = 1; }
+                        if (bitsPerSymbol < 1) bitsPerSymbol = 1;
                         needsTextUpdate = true; break;
                     case SDLK_p:
                         if (e.key.keysym.mod & KMOD_SHIFT) { pixelsPerBit += 2; } else { pixelsPerBit -= 2; }
                         if (pixelsPerBit < 4) pixelsPerBit = 4;
                         needsTextUpdate = true; break;
                     case SDLK_SPACE: needsAngleUpdate = !needsAngleUpdate; break;
-                    case SDLK_j: time_offset -= 0.1; if (time_offset < 0) { time_offset = 0; } break;
-                    case SDLK_l: time_offset += 0.1; break;   
+                    case SDLK_j: time_offset -= 0.1; if (time_offset < 0) time_offset = 0; break;
+                    case SDLK_l: time_offset += 0.1; break;
                     case SDLK_0:
-                        frequency = 30.0; amplitude = 100.0; snr_db = 100.0; pixelsPerBit = 50;
+                        frequency = 300.0; amplitude = 100.0; snr_db = 100.0; pixelsPerBit = 50;
                         rolloff_factor = 0.35; bitsPerSymbol = 1; time_offset = 0.0;
                         needsTextUpdate = true; break;
-                    case SDLK_r: time_offset = 0; break; 
+                    case SDLK_r: time_offset = 0; break;
                     case SDLK_s: export_waveform(); break;
-                    // case SDLK_f:
-                    //     if (e.key.keysym.mod & KMOD_SHIFT) { sampling_rate += 100; } else { sampling_rate -= 100; }
-                    //     if (bitsPerSymbol < 100) { bitsPerSymbol = 100; }
-                    //     needsTextUpdate = true; break;
                 }
             }
-
             if (!showHelpScreen) {
-                if (e.key.keysym.mod & KMOD_CTRL) { // Check if the Control key is held down
-                    switch (e.key.keysym.sym) {
-                        case SDLK_1:
-                            current_view = VIEW_TIME_DOMAIN;
-                            printf("Switched to Time Domain view.\n");
-                            break;
-                        case SDLK_2:
-                            current_view = VIEW_IQ_PLOT;
-                            printf("Switched to I/Q Plot view.\n");
-                            break;
-                        case SDLK_3:
-                            current_view = VIEW_POWER_SPECTRUM;
-                            printf("Currently no Power Spectrum Implemented\n");
-                            break;
-                    }
-                }
-
                 switch (e.key.keysym.sym) {
                     case SDLK_UP: amplitude += 5.0; needsTextUpdate = true; break;
                     case SDLK_DOWN: amplitude -= 5.0; if (amplitude < 0) amplitude = 0; needsTextUpdate = true; break;
-                    case SDLK_RIGHT: frequency += 0.1; needsTextUpdate = true; break;
-                    case SDLK_LEFT: frequency -= 0.1; if (frequency < 0.1) frequency = 0.1; needsTextUpdate = true; break;
+                    case SDLK_RIGHT: frequency += 1.0; needsTextUpdate = true; break;
+                    case SDLK_LEFT: frequency -= 1.0; if (frequency < 1.0) frequency = 1.0; needsTextUpdate = true; break;
                     case SDLK_RETURN:
                         strcpy(activeMessage, inputText); activeMessageLength = inputTextLength;
                         inputText[0] = '\0'; inputTextLength = 0;
-                        time_offset = 0; needsTextUpdate = true; break; // Use time_offset
+                        time_offset = 0; needsTextUpdate = true; break;
                     case SDLK_BACKSPACE:
                         if (inputTextLength > 0) { inputText[--inputTextLength] = '\0'; }
                         needsTextUpdate = true; break;
@@ -329,32 +243,20 @@ void main_loop() {
     if (needsTextUpdate) {
         char buffer_l1[256], buffer_l2[256], buffer_mode[256];
         const char* mod_str = (current_mod_type == MOD_ASK) ? "ASK" : (current_mod_type == MOD_FSK) ? "FSK" : "PSK";
-
-        char psk_order_str[16] = "";
         int mod_ord = 1 << bitsPerSymbol;
-        sprintf(psk_order_str, " (%d-%s)", mod_ord, mod_str);
-        if (current_mod_type == MOD_PSK) {
-            switch (mod_ord) {
-                case 2:
-                    sprintf(psk_order_str, " (%s)", "BPSK");
-                    break;
-                case 4:
-                    sprintf(psk_order_str, " (%s)", "QPSK");
-                    break;
-                default:
-                    break;
-            }
-        }
+        char mod_full_str[32];
+        if(mod_ord == 2 && current_mod_type == MOD_PSK) sprintf(mod_full_str, "BPSK");
+        else if(mod_ord == 4 && current_mod_type == MOD_PSK) sprintf(mod_full_str, "QPSK");
+        else sprintf(mod_full_str, "%d-%s", mod_ord, mod_str);
         
-        snprintf(buffer_l1, sizeof(buffer_l1), "A:%.0f F:%.1f %s", amplitude, frequency, psk_order_str);
-        snprintf(buffer_l2, sizeof(buffer_l2), "px/bit:%d SNR:%.0fdB Roll-off:%.2f, Sampling rate:%.f Hz", pixelsPerBit, snr_db, rolloff_factor, sampling_rate);
-        snprintf(buffer_mode, sizeof(buffer_mode), "Mode: %s (TAB to switch)", current_mode == MODE_TYPING ? "Typing" : "Command");
+        snprintf(buffer_l1, sizeof(buffer_l1), "A:%.0f F:%.0f %s", amplitude, frequency, mod_full_str);
+        snprintf(buffer_l2, sizeof(buffer_l2), "px/bit:%d SNR:%.0fdB Roll-off:%.2f, Fs:%.f Hz", pixelsPerBit, snr_db, rolloff_factor, sampling_rate);        snprintf(buffer_mode, sizeof(buffer_mode), "Mode: %s", current_mode == MODE_TYPING ? "Typing" : "Command");
 
         update_text_object(&status_line1, buffer_l1);
         update_text_object(&status_line2, buffer_l2);
         update_text_object(&mode_indicator_text, buffer_mode);
         update_text_object(&input_text_display, inputText);
-        update_text_object(&help_prompt_text, "Press H for help");
+        update_text_object(&help_prompt_text, "H for help");
         needsTextUpdate = false;
     }
 
@@ -396,182 +298,28 @@ void main_loop() {
             y_pos += status_line1.rect.h + 5;
         }
     } else {
-    // This block runs when the help screen is OFF
-    if (current_view == VIEW_TIME_DOMAIN) {
-        // --- TIME DOMAIN VIEW ---
-        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-        SDL_RenderDrawLine(renderer, 0, SCREEN_HEIGHT / 2, SCREEN_WIDTH, SCREEN_HEIGHT / 2);
-
-        int prev_y = SCREEN_HEIGHT / 2;
-        double phase = 0.0; // For FSK phase accumulation
-
-        for (int x = 0; x < SCREEN_WIDTH; x++) {
-            double current_time = time_offset + ((double)x / pixels_per_second);
-            int sample_index = (int)(current_time * sampling_rate);
-
-            if (activeMessageLength > 0) {
-                int total_message_samples = activeMessageLength * 8 * pixelsPerBit;
-                if (total_message_samples > 0) {
-                    sample_index %= total_message_samples;
-                }
-            }
-
-            double y = 0.0;
-            double symbol_period_seconds = (double)pixelsPerBit / sampling_rate;
-
-            switch (current_mod_type) {
-                case MOD_ASK: {
-                    double shaped_envelope = 0.0;
-                    int M = 1 << bitsPerSymbol;
-                    int current_symbol_index = (int)(current_time / symbol_period_seconds);
-
-                    for (int i = -4; i <= 4; ++i) {
-                        int symbol_index = current_symbol_index + i;
-                        if (symbol_index < 0) continue;
-
-                        int symbol_value = get_symbol_at_index(symbol_index, activeMessage, activeMessageLength, bitsPerSymbol);
-                        double impulse_value = (M == 1) ? symbol_value : (double)symbol_value / (M - 1);
-                        
-                        double symbol_center_time = (symbol_index + 0.5) * symbol_period_seconds;
-                        double time_from_center = current_time - symbol_center_time;
-                        double filter_kernel_value = raised_cosine(time_from_center, symbol_period_seconds, rolloff_factor);
-                        
-                        shaped_envelope += impulse_value * filter_kernel_value;
-                    }
-                    double current_amplitude = amplitude * shaped_envelope;
-                    y = current_amplitude * sin(2.0 * M_PI * frequency * current_time);
-                    break;
-                }
-                case MOD_FSK: {
-                    int symbol_index = (int)(current_time / symbol_period_seconds);
-                    int symbol_value = get_symbol_at_index(symbol_index, activeMessage, activeMessageLength, bitsPerSymbol);
-                    
-                    double frequency_separation = frequency / 2.0;
-                    double current_freq = frequency + (symbol_value * frequency_separation);
-
-                    double phase_increment = 2.0 * M_PI * current_freq / sampling_rate;
-                    phase += phase_increment;
-                    y = amplitude * sin(phase);
-                    break;
-                }
-                case MOD_PSK: {
-                    double shaped_I = 0.0, shaped_Q = 0.0;
-                    int M = 1 << bitsPerSymbol;
-                    int current_symbol_index = (int)(current_time / symbol_period_seconds);
-
-                    for (int i = -4; i <= 4; ++i) {
-                        int symbol_index = current_symbol_index + i;
-                        if (symbol_index < 0) continue;
-
-                        int symbol_value = get_symbol_at_index(symbol_index, activeMessage, activeMessageLength, bitsPerSymbol);
-                        double angle = (2.0 * M_PI * symbol_value) / M;
-                        if (M == 4) angle += M_PI / 4.0;
-                        double impulse_I = cos(angle);
-                        double impulse_Q = sin(angle);
-
-                        double symbol_center_time = (symbol_index + 0.5) * symbol_period_seconds;
-                        double time_from_center = current_time - symbol_center_time;
-                        double filter_kernel_value = raised_cosine(time_from_center, symbol_period_seconds, rolloff_factor);
-                        
-                        shaped_I += impulse_I * filter_kernel_value;
-                        shaped_Q += impulse_Q * filter_kernel_value;
-                    }
-                    double carrier_phase = 2.0 * M_PI * frequency * current_time;
-                    y = amplitude * (shaped_I * cos(carrier_phase) - shaped_Q * sin(carrier_phase));
-                    break;
-                }
-            }
-
-            if (amplitude > 0 && snr_db < 100) {
-                double signal_power = (amplitude * amplitude) / 2.0;
-                double snr_linear = pow(10.0, snr_db / 10.0);
-                double noise_power = signal_power / snr_linear;
-                double noise_amplitude_scaler = sqrt(3.0 * noise_power);
-                double noise_sample = (2.0 * (rand() / (double)RAND_MAX) - 1.0) * noise_amplitude_scaler;
-                y += noise_sample;
-            }
-
-            int current_y = (SCREEN_HEIGHT / 2) - (int)y;
-            if (x > 0) {
-                SDL_RenderDrawLine(renderer, x - 1, prev_y, x, current_y);
-            }
-            prev_y = current_y;
-        } // End for loop
-    } else if (current_view == VIEW_IQ_PLOT) {
-        // --- I/Q PLOT VIEW ---
-        SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
-        SDL_RenderDrawLine(renderer, 0, SCREEN_HEIGHT / 2, SCREEN_WIDTH, SCREEN_HEIGHT / 2); // I-axis
-        SDL_RenderDrawLine(renderer, SCREEN_WIDTH / 2, 0, SCREEN_WIDTH / 2, SCREEN_HEIGHT); // Q-axis
-
-        if (activeMessageLength > 0) {
-            int M = 1 << bitsPerSymbol;
-            int total_symbols = (activeMessageLength * 8) / bitsPerSymbol;
-
-            int prev_x_pos = SCREEN_WIDTH / 2;
-            int prev_y_pos = SCREEN_HEIGHT / 2;
-
-            for (int i = 0; i < total_symbols; ++i) {
-                int symbol_value = get_symbol_at_index(i, activeMessage, activeMessageLength, bitsPerSymbol);
-                double ideal_I = 0.0, ideal_Q = 0.0; // Declare I and Q
-
-                switch (current_mod_type) {
-                    case MOD_ASK: {
-                        ideal_I = (M == 1) ? symbol_value : (double)symbol_value / (M - 1);
-                        ideal_Q = 0.0; // Q is always zero for ASK
-                        break;
-                    }
-                    case MOD_PSK: {
-                        double angle = (2.0 * M_PI * symbol_value) / M;
-                        if (M == 4) angle += M_PI / 4.0;
-                        ideal_I = cos(angle);
-                        ideal_Q = sin(angle);
-                        break;
-                    }
-                    case MOD_FSK: {
-                        double angle = (2.0 * M_PI * symbol_value) / M;
-                        ideal_I = cos(angle);
-                        ideal_Q = sin(angle);
-                        break;
-                    }
-                }
-
-                double noise_I = 0.0, noise_Q = 0.0;
-                double snr_linear = pow(10.0, snr_db / 10.0);
-                double noise_power_per_channel = 0.5 / snr_linear;
-                double noise_std_dev = sqrt(noise_power_per_channel);
-                noise_I = ((rand() / (double)RAND_MAX) - 0.5 + (rand() / (double)RAND_MAX) - 0.5) * noise_std_dev * 4.0;
-                noise_Q = ((rand() / (double)RAND_MAX) - 0.5 + (rand() / (double)RAND_MAX) - 0.5) * noise_std_dev * 4.0;
-
-                float plot_scale = SCREEN_HEIGHT / 3.0;
-                int x_pos = SCREEN_WIDTH / 2 + (int)((ideal_I + noise_I) * plot_scale);
-                int y_pos = SCREEN_HEIGHT / 2 - (int)((ideal_Q + noise_Q) * plot_scale);
-
-                if (i > 0) { // Don't draw a line for the very first point
-                    SDL_SetRenderDrawColor(renderer, 0, 150, 255, 100); // A blue, semi-transparent line
-                    SDL_RenderDrawLine(renderer, prev_x_pos, prev_y_pos, x_pos, y_pos);
-                }
-
-                SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-                SDL_Rect point_rect = {x_pos - 2, y_pos - 2, 5, 5};
-                SDL_RenderFillRect(renderer, &point_rect);
-
-                prev_x_pos = x_pos;
-                prev_y_pos = y_pos;
-            }
+        switch (current_view) {
+            case VIEW_TIME_DOMAIN:
+                draw_time_domain_view(renderer, activeMessage, activeMessageLength, current_mod_type);
+                break;
+            case VIEW_IQ_PLOT:
+                draw_iq_plot(renderer, activeMessage, activeMessageLength, current_mod_type);
+                break;
+            case VIEW_POWER_SPECTRUM:
+                calculate_and_draw_spectrum(renderer, activeMessage, activeMessageLength, current_mod_type);
+                break;
         }
-    } // End view check
-
-    // Draw text overlays
-    draw_text_object(&status_line1, 10, 10);
-    draw_text_object(&status_line2, 10, 10 + status_line1.rect.h);
-    draw_text_object(&mode_indicator_text, 10, 10 + status_line1.rect.h + status_line2.rect.h);
-    draw_text_object(&input_text_display, 10, SCREEN_HEIGHT - input_text_display.rect.h - 10);
-    draw_text_object(&help_prompt_text, SCREEN_WIDTH - help_prompt_text.rect.w - 10, 10);
-}
+        draw_text_object(&status_line1, 10, 10);
+        draw_text_object(&status_line2, 10, 10 + status_line1.rect.h);
+        draw_text_object(&mode_indicator_text, 10, 10 + status_line1.rect.h + status_line2.rect.h);
+        draw_text_object(&input_text_display, 10, SCREEN_HEIGHT - input_text_display.rect.h - 10);
+        draw_text_object(&help_prompt_text, SCREEN_WIDTH - help_prompt_text.rect.w - 10, 10);
+    }
 
     SDL_RenderPresent(renderer);
+
     if (needsAngleUpdate && !showHelpScreen) {
-        time_offset += 1.0 / 60.0; // Scroll at a constant time rate (e.g., for 60fps)
+        time_offset += 1.0 / 60.0;
     }
 
     #ifndef __EMSCRIPTEN__
@@ -587,20 +335,20 @@ void main_loop() {
 
 // --- Main Entry Point ---
 int main(int argc, char* argv[]) {
-    (void)argc; (void)argv; // Suppress unused parameter warnings
+    (void)argc; (void)argv;
     SDL_Init(SDL_INIT_VIDEO);
     TTF_Init();
 
     window = SDL_CreateWindow("SigViz", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE);
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
-
+    
     SDL_GetRendererOutputSize(renderer, &SCREEN_WIDTH, &SCREEN_HEIGHT);
 
     const char* font_path = "assets/JetBrainsMonoNLNerdFont-Regular.ttf";
     font_size_20 = TTF_OpenFont(font_path, 20);
     font_size_18 = TTF_OpenFont(font_path, 18);
-    if (font_size_20 == NULL || font_size_18 == NULL) {
-        printf("CRITICAL ERROR: Failed to load font at '%s'. TTF_Error: %s\n", font_path, TTF_GetError());
+    if (!font_size_20 || !font_size_18) {
+        printf("CRITICAL ERROR: Failed to load font: %s\n", TTF_GetError());
         return 1;
     }
 

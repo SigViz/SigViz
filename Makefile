@@ -2,7 +2,6 @@
 CC = gcc
 
 # --- Native Build Configuration ---
-# Use sdl2-config to get compiler and linker flags for native build
 NATIVE_CFLAGS = -Wall -Wextra -g `sdl2-config --cflags`
 NATIVE_LDFLAGS = `sdl2-config --libs` -lSDL2_ttf -lm
 
@@ -14,14 +13,11 @@ WEB_DIR = web
 
 # Automatically find all .c files in the src directory
 SOURCES = $(wildcard $(SRC_DIR)/*.c)
-
-# Create a list of corresponding object files for the native build
+# Create a list of corresponding object files
 OBJECTS = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SOURCES))
-
-# Define the final executable name and path for the native build
-EXECUTABLE = sine_wave_modulator
+# Define the final executable name and path
+EXECUTABLE = SigViz
 TARGET = $(BIN_DIR)/$(EXECUTABLE)
-
 
 # --- Build Rules ---
 
@@ -42,7 +38,14 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	@mkdir -p $(OBJ_DIR)
 	$(CC) $(NATIVE_CFLAGS) -c -o $@ $<
 
-# Rule to build the web version using Emscripten in Docker
+# Explicit dependencies to ensure proper recompilation when headers change
+$(OBJ_DIR)/main.o: $(SRC_DIR)/shared.h $(SRC_DIR)/time_domain.h $(SRC_DIR)/iq_plot.h $(SRC_DIR)/fft.h
+$(OBJ_DIR)/time_domain.o: $(SRC_DIR)/shared.h
+$(OBJ_DIR)/iq_plot.o: $(SRC_DIR)/shared.h
+$(OBJ_DIR)/fft.o: $(SRC_DIR)/shared.h
+$(OBJ_DIR)/text_renderer.o: $(SRC_DIR)/text_renderer.h
+
+# Rule to build the web version using Emscripten
 web:
 	@echo "Building for web..."
 	@mkdir -p $(WEB_DIR)
@@ -59,7 +62,6 @@ web:
 		--shell-file src/template.html \
 		-o $(WEB_DIR)/index.html
 	@echo "Web build complete: '$(WEB_DIR)/index.html'"
-
 
 # Rule to clean up all generated files
 clean:

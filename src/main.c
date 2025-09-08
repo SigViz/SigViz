@@ -176,7 +176,12 @@ void main_loop() {
         update_text_object(&status_line2, buffer_l2);
         update_text_object(&mode_indicator_text, buffer_mode);
         update_text_object(&input_text_display, inputText);
-        update_text_object(&help_prompt_text, "H for help");
+        if (current_mode == MODE_TYPING) {
+            update_text_object(&help_prompt_text, "Press TAB then H for help");    
+        } else {
+            update_text_object(&help_prompt_text, "Press H for help");    
+        }
+        
         needsTextUpdate = false;
     }
 

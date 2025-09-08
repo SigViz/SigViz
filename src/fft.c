@@ -61,27 +61,26 @@ void calculate_and_draw_spectrum(
     SDL_Renderer* renderer,
     const char* activeMessage,
     int activeMessageLength,
-    ModulationType current_mod_type)
+    ModulationType current_mod_type,
+    // Add the parameters here as well
+    WindowType current_window_type,
+    ViewMode current_view,
+    int mouse_x)
 {
-    // --- 1. DYNAMIC MEMORY ALLOCATION ---
-    // Use the global fft_size variable, ensuring it's a power of 2
+    // 1. DYNAMIC MEMORY ALLOCATION
     if ((fft_size & (fft_size - 1)) != 0 || fft_size == 0) {
-        // Handle case where fft_size is not a power of 2, maybe default to 1024
-        // For now, we'll just return to avoid crashing the FFT.
-        return;
+        return; // FFT size must be a power of 2
     }
-    
     Complex* fft_buffer = (Complex*)malloc(fft_size * sizeof(Complex));
     double* psd = (double*)malloc((fft_size / 2) * sizeof(double));
 
     if (fft_buffer == NULL || psd == NULL) {
-        printf("Failed to allocate memory for FFT buffers.\n");
         if (fft_buffer) free(fft_buffer);
         if (psd) free(psd);
         return;
     }
 
-    // --- 2. Generate the signal data to be transformed ---
+    // 2. Generate the signal data to be transformed
     if (activeMessageLength > 0) {
         double phase = 0.0;
         double symbol_period_seconds = (double)pixelsPerBit / sampling_rate;
@@ -147,8 +146,13 @@ void calculate_and_draw_spectrum(
             fft_buffer[i].real = y;
             fft_buffer[i].imag = 0.0;
 
-            double hann_window = 0.5 * (1 - cos(2 * M_PI * i / (fft_size - 1)));
-            fft_buffer[i].real *= hann_window;
+            double window_value = 1.0;
+            if (current_window_type == WINDOW_HANN) {
+                window_value = 0.5 * (1 - cos(2 * M_PI * i / (fft_size - 1)));
+            } else if (current_window_type == WINDOW_HAMMING) {
+                window_value = 0.54 - 0.46 * cos(2 * M_PI * i / (fft_size - 1));
+            }
+            fft_buffer[i].real *= window_value;
         }
     } else {
         for(int i = 0; i < fft_size; ++i) {
@@ -157,16 +161,19 @@ void calculate_and_draw_spectrum(
         }
     }
 
-    // --- 3. Run the FFT ---
+    // 3. Run the FFT
     fft(fft_buffer, fft_size);
 
-    // --- 4. Calculate the Power Spectral Density (PSD) in dB ---
+    // 4. Calculate the Power Spectral Density (PSD) in dB
     for (int i = 0; i < fft_size / 2; ++i) {
         double power = fft_buffer[i].real * fft_buffer[i].real + fft_buffer[i].imag * fft_buffer[i].imag;
+        if (spectrum_power > 1) {
+            power = pow(power, spectrum_power);
+        }
         psd[i] = 10.0 * log10(power / fft_size + 1e-12);
     }
     
-    // --- 5. Draw the spectrum using the zoom and span variables ---
+    // 5. Draw the spectrum with hover detection
     double nyquist = sampling_rate / 2.0;
     double freq_per_bin = nyquist / (fft_size / 2.0);
 
@@ -189,16 +196,28 @@ void calculate_and_draw_spectrum(
     SDL_SetRenderDrawColor(renderer, 100, 100, 100, 255);
     SDL_RenderDrawLine(renderer, 50, SCREEN_HEIGHT - 50, SCREEN_WIDTH - 50, SCREEN_HEIGHT - 50);
 
-    SDL_SetRenderDrawColor(renderer, 100, 255, 100, 255);
+    // Reset hover info at the start of the frame
+    hovered_frequency = 0.0;
+    hovered_power = -999.0;
+
     for (int i = start_bin; i <= end_bin; ++i) {
         int x_pos = 50 + (int)(((double)(i - start_bin) / (end_bin - start_bin)) * (SCREEN_WIDTH - 100));
         int y_height = (int)((psd[i] - (max_db - 90.0)) / 90.0 * (SCREEN_HEIGHT - 100));
         if (y_height < 0) y_height = 0;
         int y_pos = SCREEN_HEIGHT - 50 - y_height;
+
+        // Check if the mouse is over the current bar
+        if (abs(mouse_x - x_pos) <= 2 && current_view == VIEW_POWER_SPECTRUM) {
+            hovered_frequency = i * freq_per_bin;
+            hovered_power = psd[i];
+            SDL_SetRenderDrawColor(renderer, 255, 100, 100, 255); // Highlight in red
+        } else {
+            SDL_SetRenderDrawColor(renderer, 100, 255, 100, 255); // Default green
+        }
         SDL_RenderDrawLine(renderer, x_pos, SCREEN_HEIGHT - 50, x_pos, y_pos);
     }
-
-    // --- 6. FREE DYNAMICALLY ALLOCATED MEMORY ---
+    
+    // 6. FREE DYNAMICALLY ALLOCATED MEMORY
     free(fft_buffer);
     free(psd);
 }

@@ -34,7 +34,13 @@ double sampling_rate = 4000.0;
 double pixels_per_second = 500.0;
 double spectrum_center_freq = 1000.0; 
 double spectrum_span = 1000.0;  
-int fft_size = 2048;      
+int fft_size = 2048;   
+WindowType current_window_type = WINDOW_HANN;   
+int spectrum_power = 1;
+double hovered_frequency = 0.0;
+double hovered_power = -999.0; // Use a very low value to indicate no hover
+int mouse_x = 0;
+int mouse_y = 0;
 
 AppMode current_mode = MODE_TYPING;
 ModulationType current_mod_type = MOD_ASK;
@@ -68,6 +74,14 @@ void main_loop() {
             if (inputTextLength < INPUT_BUFFER_SIZE - 1) {
                 strcat(inputText, e.text.text);
                 inputTextLength++;
+                needsTextUpdate = true;
+            }
+        }
+        if (e.type == SDL_MOUSEMOTION) {
+            mouse_x = e.motion.x;
+            mouse_y = e.motion.y;
+            // Force a text update if we are in the spectrum view
+            if (current_view == VIEW_POWER_SPECTRUM) {
                 needsTextUpdate = true;
             }
         }
@@ -141,10 +155,17 @@ void main_loop() {
                             } else { // Decrease FFT size
                                 fft_size /= 2;
                             }
-                            // Clamp the value to a sensible range
-                            if (fft_size > 8192) fft_size = 8192;
-                            if (fft_size < 512) fft_size = 512;
-                            
+                            needsTextUpdate = true;
+                            break;
+                        case SDLK_e:
+                            if (e.key.keysym.mod & KMOD_SHIFT) { // Increase power
+                                spectrum_power++;
+                            } else { // Decrease power
+                                spectrum_power--;
+                            }
+                            // Clamp to a reasonable range
+                            if (spectrum_power < 1) spectrum_power = 1;
+
                             needsTextUpdate = true;
                             break;
                     }
@@ -184,6 +205,13 @@ void main_loop() {
         snprintf(buffer_l1, sizeof(buffer_l1), "A:%.0f F:%.0f %s", amplitude, frequency, mod_full_str);
         snprintf(buffer_l2, sizeof(buffer_l2), "px/bit:%d SNR:%.0fdB Roll-off:%.2f, Fs:%.f Hz", pixelsPerBit, snr_db, rolloff_factor, sampling_rate);        
         snprintf(buffer_mode, sizeof(buffer_mode), "Mode: %s (Press TAB to switch)", current_mode == MODE_TYPING ? "Typing" : "Command");
+
+        if (current_view == VIEW_POWER_SPECTRUM && hovered_power > -990.0) {
+            char hover_buffer[128];
+            snprintf(hover_buffer, sizeof(hover_buffer), "  [%.1f Hz: %.1f dB]", hovered_frequency, hovered_power);
+            // Append it to the first status line
+            strncat(buffer_l1, hover_buffer, sizeof(buffer_l1) - strlen(buffer_l1) - 1);
+        }
 
         update_text_object(&status_line1, buffer_l1);
         update_text_object(&status_line2, buffer_l2);
@@ -263,7 +291,7 @@ void main_loop() {
                 draw_iq_plot(renderer, activeMessage, activeMessageLength, current_mod_type);
                 break;
             case VIEW_POWER_SPECTRUM:
-                calculate_and_draw_spectrum(renderer, activeMessage, activeMessageLength, current_mod_type);
+                    calculate_and_draw_spectrum(renderer, activeMessage, activeMessageLength, current_mod_type, current_window_type, current_view, mouse_x);
                 break;
         }
         draw_text_object(&status_line1, 10, 10);

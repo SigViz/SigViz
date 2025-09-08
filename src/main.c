@@ -267,7 +267,7 @@ int main(int argc, char* argv[]) {
     window = SDL_CreateWindow("SigViz", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, 1280, 720, SDL_WINDOW_SHOWN | SDL_WINDOW_ALLOW_HIGHDPI | SDL_WINDOW_RESIZABLE);
     renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
     
-    SDL_GetRendererOutputSize(renderer, &MSCREEN_WIDTH, &SCREEN_HEIGHT);
+    SDL_GetRendererOutputSize(renderer, &SCREEN_WIDTH, &SCREEN_HEIGHT);
 
     const char* font_path = "assets/JetBrainsMonoNLNerdFont-Regular.ttf";
     font_size_20 = TTF_OpenFont(font_path, 20);

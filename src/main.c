@@ -242,13 +242,14 @@ void main_loop() {
         }
 
         switch (current_view) {
-            case VIEW_POWER_SPECTRUM:
-                char* window_str = (current_window_type == WINDOW_HANN) ? "HANN" : (current_window_type == WINDOW_HAMMING) ? "HAMMING" : "RECTANGULAR";
+            case VIEW_POWER_SPECTRUM: {
+                const char* window_str = (current_window_type == WINDOW_HANN) ? "HANN" : (current_window_type == WINDOW_HAMMING) ? "HAMMING" : "RECTANGULAR";
                 snprintf(buffer_l2, sizeof(buffer_l2), "px/bit:%d SNR:%.0fdB Roll-off:%.2f, Fs:%.f Hz, FFT:%d, TRANSFORM:^%d", pixelsPerBit, snr_db, rolloff_factor, sampling_rate, fft_size, spectrum_power);   
                 snprintf(buffer_mode, sizeof(buffer_mode), "Mode: %s (Press TAB to switch), [WINDOW TYPE: %s]", current_mode == MODE_TYPING ? "Typing" : "Command", window_str);
                 update_text_object(&status_line2, buffer_l2);
                 update_text_object(&mode_indicator_text, buffer_mode);
                 break;
+            } 
             default:
                 break;
         }

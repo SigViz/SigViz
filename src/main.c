@@ -33,7 +33,8 @@ double time_offset = 0.0;
 double sampling_rate = 4000.0;
 double pixels_per_second = 500.0;
 double spectrum_center_freq = 1000.0; 
-double spectrum_span = 1000.0;        
+double spectrum_span = 1000.0;  
+int fft_size = 2048;      
 
 AppMode current_mode = MODE_TYPING;
 ModulationType current_mod_type = MOD_ASK;
@@ -134,6 +135,18 @@ void main_loop() {
                             spectrum_span /= 1.5;
                             if (spectrum_span < 10.0) spectrum_span = 10.0;
                             break;
+                        case SDLK_f:
+                            if (e.key.keysym.mod & KMOD_SHIFT) { // Increase FFT size
+                                fft_size *= 2;
+                            } else { // Decrease FFT size
+                                fft_size /= 2;
+                            }
+                            // Clamp the value to a sensible range
+                            if (fft_size > 8192) fft_size = 8192;
+                            if (fft_size < 512) fft_size = 512;
+                            
+                            needsTextUpdate = true;
+                            break;
                     }
                 }
                 // This block is inside if (!showHelpScreen)
@@ -176,12 +189,28 @@ void main_loop() {
         update_text_object(&status_line2, buffer_l2);
         update_text_object(&mode_indicator_text, buffer_mode);
         update_text_object(&input_text_display, inputText);
-        if (current_mode == MODE_TYPING) {
-            update_text_object(&help_prompt_text, "Press TAB then H for help");    
-        } else {
-            update_text_object(&help_prompt_text, "Press H for help");    
+
+        switch (current_mode) {
+            case MODE_TYPING:
+                update_text_object(&help_prompt_text, "Press TAB then H for help");    
+                break;
+            case MODE_COMMAND:
+                update_text_object(&help_prompt_text, "Press H for help");    
+                break;
+            default:
+                update_text_object(&help_prompt_text, "Press H for help");    
+                break;
         }
-        
+
+        switch (current_view) {
+            case VIEW_POWER_SPECTRUM:
+                snprintf(buffer_l2, sizeof(buffer_l2), "px/bit:%d SNR:%.0fdB Roll-off:%.2f, Fs:%.f Hz, FFT:%d", pixelsPerBit, snr_db, rolloff_factor, sampling_rate, fft_size);        
+                update_text_object(&status_line2, buffer_l2);
+                break;
+            default:
+                break;
+        }
+
         needsTextUpdate = false;
     }
 

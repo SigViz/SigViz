@@ -24,6 +24,7 @@ extern double sampling_rate;
 extern double pixels_per_second;
 extern double spectrum_center_freq;
 extern double spectrum_span;
+extern int fft_size;
 
 // --- Shared Helper Function Prototypes ---
 int get_symbol_at_index(int symbol_index, const char* message, int message_len, int bits_per_sym);

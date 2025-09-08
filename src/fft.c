@@ -63,17 +63,31 @@ void calculate_and_draw_spectrum(
     int activeMessageLength,
     ModulationType current_mod_type)
 {
-    const int FFT_SIZE = 2048;
-    Complex fft_buffer[FFT_SIZE];
-    double psd[FFT_SIZE / 2];
+    // --- 1. DYNAMIC MEMORY ALLOCATION ---
+    // Use the global fft_size variable, ensuring it's a power of 2
+    if ((fft_size & (fft_size - 1)) != 0 || fft_size == 0) {
+        // Handle case where fft_size is not a power of 2, maybe default to 1024
+        // For now, we'll just return to avoid crashing the FFT.
+        return;
+    }
+    
+    Complex* fft_buffer = (Complex*)malloc(fft_size * sizeof(Complex));
+    double* psd = (double*)malloc((fft_size / 2) * sizeof(double));
 
-    // 1. Generate the signal data to be transformed
+    if (fft_buffer == NULL || psd == NULL) {
+        printf("Failed to allocate memory for FFT buffers.\n");
+        if (fft_buffer) free(fft_buffer);
+        if (psd) free(psd);
+        return;
+    }
+
+    // --- 2. Generate the signal data to be transformed ---
     if (activeMessageLength > 0) {
         double phase = 0.0;
         double symbol_period_seconds = (double)pixelsPerBit / sampling_rate;
         int total_symbols = (activeMessageLength * 8) / bitsPerSymbol;
 
-        for (int i = 0; i < FFT_SIZE; ++i) {
+        for (int i = 0; i < fft_size; ++i) {
             double current_time = time_offset + (double)i / sampling_rate;
             double y = 0.0;
 
@@ -133,29 +147,28 @@ void calculate_and_draw_spectrum(
             fft_buffer[i].real = y;
             fft_buffer[i].imag = 0.0;
 
-            double hann_window = 0.5 * (1 - cos(2 * M_PI * i / (FFT_SIZE - 1)));
+            double hann_window = 0.5 * (1 - cos(2 * M_PI * i / (fft_size - 1)));
             fft_buffer[i].real *= hann_window;
         }
     } else {
-        // If no message, fill buffer with zeros
-        for(int i = 0; i < FFT_SIZE; ++i) {
+        for(int i = 0; i < fft_size; ++i) {
             fft_buffer[i].real = 0.0;
             fft_buffer[i].imag = 0.0;
         }
     }
 
-    // 2. Run the FFT
-    fft(fft_buffer, FFT_SIZE);
+    // --- 3. Run the FFT ---
+    fft(fft_buffer, fft_size);
 
-    // 3. Calculate the Power Spectral Density (PSD) in dB
-    for (int i = 0; i < FFT_SIZE / 2; ++i) {
+    // --- 4. Calculate the Power Spectral Density (PSD) in dB ---
+    for (int i = 0; i < fft_size / 2; ++i) {
         double power = fft_buffer[i].real * fft_buffer[i].real + fft_buffer[i].imag * fft_buffer[i].imag;
-        psd[i] = 10.0 * log10(power / FFT_SIZE + 1e-12);
+        psd[i] = 10.0 * log10(power / fft_size + 1e-12);
     }
     
-    // 4. Draw the spectrum using the zoom and span variables
+    // --- 5. Draw the spectrum using the zoom and span variables ---
     double nyquist = sampling_rate / 2.0;
-    double freq_per_bin = nyquist / (FFT_SIZE / 2);
+    double freq_per_bin = nyquist / (fft_size / 2.0);
 
     double start_freq = spectrum_center_freq - (spectrum_span / 2.0);
     double end_freq = spectrum_center_freq + (spectrum_span / 2.0);
@@ -165,7 +178,7 @@ void calculate_and_draw_spectrum(
     int start_bin = (int)(start_freq / freq_per_bin);
     int end_bin = (int)(end_freq / freq_per_bin);
     if (start_bin < 0) start_bin = 0;
-    if (end_bin >= FFT_SIZE / 2) end_bin = FFT_SIZE / 2 - 1;
+    if (end_bin >= fft_size / 2) end_bin = fft_size / 2 - 1;
     if (end_bin <= start_bin) end_bin = start_bin + 1;
 
     double max_db = -150.0;
@@ -184,4 +197,8 @@ void calculate_and_draw_spectrum(
         int y_pos = SCREEN_HEIGHT - 50 - y_height;
         SDL_RenderDrawLine(renderer, x_pos, SCREEN_HEIGHT - 50, x_pos, y_pos);
     }
+
+    // --- 6. FREE DYNAMICALLY ALLOCATED MEMORY ---
+    free(fft_buffer);
+    free(psd);
 }

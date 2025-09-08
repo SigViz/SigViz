@@ -26,17 +26,19 @@ void draw_iq_plot(
         double ideal_I = 0.0, ideal_Q = 0.0;
 
         switch (current_mod_type) {
-            case MOD_ASK:
+            case MOD_ASK: {
                 ideal_I = (M == 1) ? symbol_value : (double)symbol_value / (M - 1);
                 ideal_Q = 0.0;
                 break;
+            }
             case MOD_FSK:
-            case MOD_PSK:
+            case MOD_PSK: {
                 double angle = (2.0 * M_PI * symbol_value) / M;
                 if (current_mod_type == MOD_PSK && M == 4) angle += M_PI / 4.0;
                 ideal_I = cos(angle);
                 ideal_Q = sin(angle);
                 break;
+            }
         }
 
         double noise_I = 0.0, noise_Q = 0.0;

@@ -22,6 +22,8 @@ extern int bitsPerSymbol;
 extern double time_offset;
 extern double sampling_rate;
 extern double pixels_per_second;
+extern double spectrum_center_freq;
+extern double spectrum_span;
 
 // --- Shared Helper Function Prototypes ---
 int get_symbol_at_index(int symbol_index, const char* message, int message_len, int bits_per_sym);

@@ -35,6 +35,8 @@ int bitsPerSymbol = 1;
 double time_offset = 0.0;
 double sampling_rate = 4000.0;
 double pixels_per_second = 500.0;
+double spectrum_center_freq = 1000.0; 
+double spectrum_span = 1000.0;        
 
 AppMode current_mode = MODE_TYPING;
 ModulationType current_mod_type = MOD_ASK;
@@ -223,11 +225,37 @@ void main_loop() {
                 }
             }
             if (!showHelpScreen) {
+                if (current_view == VIEW_POWER_SPECTRUM) {
+                    switch (e.key.keysym.sym) {
+                        case SDLK_LEFT: // Pan left
+                            spectrum_center_freq -= spectrum_span / 10.0;
+                            if (spectrum_center_freq < 0) spectrum_center_freq = 0;
+                            break;
+                        case SDLK_RIGHT: // Pan right
+                            spectrum_center_freq += spectrum_span / 10.0;
+                            if (spectrum_center_freq > sampling_rate / 2.0) spectrum_center_freq = sampling_rate / 2.0;
+                            break;
+                        case SDLK_DOWN: // Zoom out
+                            spectrum_span *= 1.5;
+                            if (spectrum_span > sampling_rate / 2.0) spectrum_span = sampling_rate / 2.0;
+                            break;
+                        case SDLK_UP: // Zoom in
+                            spectrum_span /= 1.5;
+                            if (spectrum_span < 10.0) spectrum_span = 10.0;
+                            break;
+                    }
+                }
+                // This block is inside if (!showHelpScreen)
+                if (current_view == VIEW_TIME_DOMAIN) {
+                    switch (e.key.keysym.sym) {
+                        case SDLK_UP: amplitude += 5.0; needsTextUpdate = true; break;
+                        case SDLK_DOWN: amplitude -= 5.0; if (amplitude < 0) amplitude = 0; needsTextUpdate = true; break;
+                        case SDLK_RIGHT: frequency += 1.0; needsTextUpdate = true; break;
+                        case SDLK_LEFT: frequency -= 1.0; if (frequency < 1.0) frequency = 1.0; needsTextUpdate = true; break;
+                    }
+                }
+                // This switch handles keys that work in any view
                 switch (e.key.keysym.sym) {
-                    case SDLK_UP: amplitude += 5.0; needsTextUpdate = true; break;
-                    case SDLK_DOWN: amplitude -= 5.0; if (amplitude < 0) amplitude = 0; needsTextUpdate = true; break;
-                    case SDLK_RIGHT: frequency += 1.0; needsTextUpdate = true; break;
-                    case SDLK_LEFT: frequency -= 1.0; if (frequency < 1.0) frequency = 1.0; needsTextUpdate = true; break;
                     case SDLK_RETURN:
                         strcpy(activeMessage, inputText); activeMessageLength = inputTextLength;
                         inputText[0] = '\0'; inputTextLength = 0;
@@ -251,7 +279,7 @@ void main_loop() {
         
         snprintf(buffer_l1, sizeof(buffer_l1), "A:%.0f F:%.0f %s", amplitude, frequency, mod_full_str);
         snprintf(buffer_l2, sizeof(buffer_l2), "px/bit:%d SNR:%.0fdB Roll-off:%.2f, Fs:%.f Hz", pixelsPerBit, snr_db, rolloff_factor, sampling_rate);        
-        snprintf(buffer_mode, sizeof(buffer_mode), "Mode: %s", current_mode == MODE_TYPING ? "Typing" : "Command");
+        snprintf(buffer_mode, sizeof(buffer_mode), "Mode: %s (Press TAB to switch)", current_mode == MODE_TYPING ? "Typing" : "Command");
 
         update_text_object(&status_line1, buffer_l1);
         update_text_object(&status_line2, buffer_l2);
@@ -278,7 +306,7 @@ void main_loop() {
             "H         - Toggle this Help Screen",
             "1,2,3     - Switch Modulation (ASK, FSK, PSK)",
             "CTRL + 1,2,3     - Switch View (Time Domain, IQ Plot, Power Spectrum)",
-            "Arrows    - Adjust Amplitude & Frequency",
+            "Arrows    - Adjust Amplitude & Frequency (Time Domain) | Zoom & Move (Power Spectrmu)",
             "M/Shift+M - Decrease/Increase PSK Order (BPSK, QPSK...)",
             "N/Shift+N - Decrease/Increase SNR",
             "B/Shift+B - Decrease/Increase Roll-off Factor",

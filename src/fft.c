@@ -3,20 +3,24 @@
 #include <math.h>
 #include <stdlib.h>
 
+// A simple structure to hold a complex number
 typedef struct {
     double real;
     double imag;
 } Complex;
 
+// Swaps two complex numbers (can be static as it's only used here)
 static void swap_complex(Complex* a, Complex* b) {
     Complex temp = *a;
     *a = *b;
     *b = temp;
 }
 
+// The Radix-2 Cooley-Tukey FFT algorithm
 static void fft(Complex* x, int N) {
     if (N <= 1) return;
 
+    // Bit-Reversal Permutation
     int j = 0;
     for (int i = 1; i < N; i++) {
         int bit = N >> 1;
@@ -30,6 +34,7 @@ static void fft(Complex* x, int N) {
         }
     }
 
+    // Cooley-Tukey Algorithm
     for (int len = 2; len <= N; len <<= 1) {
         double angle = -2.0 * M_PI / len;
         Complex wlen = {cos(angle), sin(angle)};
@@ -51,6 +56,7 @@ static void fft(Complex* x, int N) {
     }
 }
 
+// Main function to calculate and draw the power spectrum
 void calculate_and_draw_spectrum(
     SDL_Renderer* renderer,
     const char* activeMessage,
@@ -61,18 +67,16 @@ void calculate_and_draw_spectrum(
     Complex fft_buffer[FFT_SIZE];
     double psd[FFT_SIZE / 2];
 
+    // 1. Generate the signal data to be transformed
     if (activeMessageLength > 0) {
-        // Generate the signal data to be transformed
-        double phase = 0.0; // Private phase accumulator for FSK in this scope
+        double phase = 0.0;
         double symbol_period_seconds = (double)pixelsPerBit / sampling_rate;
         int total_symbols = (activeMessageLength * 8) / bitsPerSymbol;
 
         for (int i = 0; i < FFT_SIZE; ++i) {
-            // We use a fixed chunk of the signal starting from time_offset
             double current_time = time_offset + (double)i / sampling_rate;
             double y = 0.0;
 
-            // This switch block is a direct copy of the one in time_domain.c
             switch (current_mod_type) {
                 case MOD_ASK: {
                     double shaped_envelope = 0.0;
@@ -126,34 +130,46 @@ void calculate_and_draw_spectrum(
                 }
             }
             
-            // Populate the FFT buffer with the generated sample
             fft_buffer[i].real = y;
             fft_buffer[i].imag = 0.0;
 
-            // Apply a Hann window to the sample
             double hann_window = 0.5 * (1 - cos(2 * M_PI * i / (FFT_SIZE - 1)));
             fft_buffer[i].real *= hann_window;
         }
-    }
-    
-    // For now, let's just transform a simple sine wave for demonstration
-    for(int i = 0; i < FFT_SIZE; ++i) {
-        double current_time = (double)i / sampling_rate;
-        fft_buffer[i].real = amplitude * sin(2.0 * M_PI * frequency * current_time);
-        fft_buffer[i].imag = 0.0;
-        double hann_window = 0.5 * (1 - cos(2 * M_PI * i / (FFT_SIZE - 1)));
-        fft_buffer[i].real *= hann_window;
+    } else {
+        // If no message, fill buffer with zeros
+        for(int i = 0; i < FFT_SIZE; ++i) {
+            fft_buffer[i].real = 0.0;
+            fft_buffer[i].imag = 0.0;
+        }
     }
 
+    // 2. Run the FFT
     fft(fft_buffer, FFT_SIZE);
 
+    // 3. Calculate the Power Spectral Density (PSD) in dB
     for (int i = 0; i < FFT_SIZE / 2; ++i) {
         double power = fft_buffer[i].real * fft_buffer[i].real + fft_buffer[i].imag * fft_buffer[i].imag;
         psd[i] = 10.0 * log10(power / FFT_SIZE + 1e-12);
     }
+    
+    // 4. Draw the spectrum using the zoom and span variables
+    double nyquist = sampling_rate / 2.0;
+    double freq_per_bin = nyquist / (FFT_SIZE / 2);
 
-    double max_db = -100.0;
-    for (int i = 0; i < FFT_SIZE / 2; ++i) {
+    double start_freq = spectrum_center_freq - (spectrum_span / 2.0);
+    double end_freq = spectrum_center_freq + (spectrum_span / 2.0);
+    if (start_freq < 0) start_freq = 0;
+    if (end_freq > nyquist) end_freq = nyquist;
+
+    int start_bin = (int)(start_freq / freq_per_bin);
+    int end_bin = (int)(end_freq / freq_per_bin);
+    if (start_bin < 0) start_bin = 0;
+    if (end_bin >= FFT_SIZE / 2) end_bin = FFT_SIZE / 2 - 1;
+    if (end_bin <= start_bin) end_bin = start_bin + 1;
+
+    double max_db = -150.0;
+    for (int i = start_bin; i <= end_bin; ++i) {
         if (psd[i] > max_db) max_db = psd[i];
     }
 
@@ -161,9 +177,9 @@ void calculate_and_draw_spectrum(
     SDL_RenderDrawLine(renderer, 50, SCREEN_HEIGHT - 50, SCREEN_WIDTH - 50, SCREEN_HEIGHT - 50);
 
     SDL_SetRenderDrawColor(renderer, 100, 255, 100, 255);
-    for (int i = 0; i < FFT_SIZE / 2; ++i) {
-        int x_pos = 50 + (int)((double)i / (FFT_SIZE / 2) * (SCREEN_WIDTH - 100));
-        int y_height = (int)((psd[i] - (max_db - 60)) / 60.0 * (SCREEN_HEIGHT - 100));
+    for (int i = start_bin; i <= end_bin; ++i) {
+        int x_pos = 50 + (int)(((double)(i - start_bin) / (end_bin - start_bin)) * (SCREEN_WIDTH - 100));
+        int y_height = (int)((psd[i] - (max_db - 90.0)) / 90.0 * (SCREEN_HEIGHT - 100));
         if (y_height < 0) y_height = 0;
         int y_pos = SCREEN_HEIGHT - 50 - y_height;
         SDL_RenderDrawLine(renderer, x_pos, SCREEN_HEIGHT - 50, x_pos, y_pos);

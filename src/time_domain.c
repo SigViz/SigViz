@@ -53,7 +53,6 @@ void draw_time_domain_view(
                 break;
             }
             case MOD_FSK: {
-                int M = 1 << bitsPerSymbol;
                 int symbol_index = (int)(current_time / symbol_period_seconds);
                 int symbol_value = get_symbol_at_index(symbol_index, activeMessage, activeMessageLength, bitsPerSymbol);
                 

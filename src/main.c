@@ -98,11 +98,15 @@ void main_loop() {
                     case SDLK_3: current_view = VIEW_POWER_SPECTRUM; needsTextUpdate = true; break;
                 }
             } else if (current_mode == MODE_COMMAND) {
+                if (!(e.key.keysym.mod & KMOD_SHIFT)) {
+                    switch (e.key.keysym.sym) {
+                        case SDLK_1: current_mod_type = MOD_ASK; needsTextUpdate = true; break;
+                        case SDLK_2: current_mod_type = MOD_FSK; needsTextUpdate = true; break;
+                        case SDLK_3: current_mod_type = MOD_PSK; needsTextUpdate = true; break;
+                    }
+                }
                 switch (e.key.keysym.sym) {
                     case SDLK_h: showHelpScreen = !showHelpScreen; needsTextUpdate = true; break;
-                    case SDLK_1: current_mod_type = MOD_ASK; needsTextUpdate = true; break;
-                    case SDLK_2: current_mod_type = MOD_FSK; needsTextUpdate = true; break;
-                    case SDLK_3: current_mod_type = MOD_PSK; needsTextUpdate = true; break;
                     case SDLK_b:
                         if (e.key.keysym.mod & KMOD_SHIFT) { rolloff_factor += 0.05; } else { rolloff_factor -= 0.05; }
                         if (rolloff_factor > 1.0) rolloff_factor = 1.0;
@@ -132,6 +136,13 @@ void main_loop() {
             }
             if (!showHelpScreen) {
                 if (current_view == VIEW_POWER_SPECTRUM) {
+                    if (e.key.keysym.mod & KMOD_SHIFT) {
+                        switch (e.key.keysym.sym) {
+                            case SDLK_1: current_window_type = WINDOW_HANN; needsTextUpdate = true; break;
+                            case SDLK_2: current_window_type = WINDOW_HAMMING; needsTextUpdate = true; break;
+                            case SDLK_3: current_window_type = WINDOW_RECTANGULAR; needsTextUpdate = true; break;
+                        }
+                    }
                     switch (e.key.keysym.sym) {
                         case SDLK_LEFT: // Pan left
                             spectrum_center_freq -= spectrum_span / 10.0;
@@ -159,9 +170,9 @@ void main_loop() {
                             break;
                         case SDLK_e:
                             if (e.key.keysym.mod & KMOD_SHIFT) { // Increase power
-                                spectrum_power++;
+                                spectrum_power *= 2;
                             } else { // Decrease power
-                                spectrum_power--;
+                                spectrum_power /= 2;
                             }
                             // Clamp to a reasonable range
                             if (spectrum_power < 1) spectrum_power = 1;
@@ -232,8 +243,11 @@ void main_loop() {
 
         switch (current_view) {
             case VIEW_POWER_SPECTRUM:
-                snprintf(buffer_l2, sizeof(buffer_l2), "px/bit:%d SNR:%.0fdB Roll-off:%.2f, Fs:%.f Hz, FFT:%d", pixelsPerBit, snr_db, rolloff_factor, sampling_rate, fft_size);        
+                const char* window_str = (current_window_type == WINDOW_HANN) ? "HANN" : (current_window_type == WINDOW_HAMMING) ? "HAMMING" : "RECTANGULAR";
+                snprintf(buffer_l2, sizeof(buffer_l2), "px/bit:%d SNR:%.0fdB Roll-off:%.2f, Fs:%.f Hz, FFT:%d, TRANSFORM:^%d", pixelsPerBit, snr_db, rolloff_factor, sampling_rate, fft_size, spectrum_power);   
+                snprintf(buffer_mode, sizeof(buffer_mode), "Mode: %s (Press TAB to switch), [WINDOW TYPE: %s]", current_mode == MODE_TYPING ? "Typing" : "Command", window_str);
                 update_text_object(&status_line2, buffer_l2);
+                update_text_object(&mode_indicator_text, buffer_mode);
                 break;
             default:
                 break;
@@ -263,7 +277,7 @@ void main_loop() {
             " ",
             "H         - Toggle this Help Screen",
             "1,2,3     - Switch Modulation (ASK, FSK, PSK)",
-            "CTRL + 1,2,3     - Switch View (Time Domain, IQ Plot, Power Spectrum)",
+            "CTRL+1,2,3     - Switch View (Time Domain, IQ Plot, Power Spectrum)",
             "M/Shift+M - Decrease/Increase Modulation Order (BPSK, QPSK...)",
             "N/Shift+N - Decrease/Increase SNR",
             "B/Shift+B - Decrease/Increase Roll-off Factor",
@@ -274,6 +288,12 @@ void main_loop() {
             "Space     - Pause/Resume Scrolling",
             "0 (zero)  - Reset All Waveform Parameters",
             "S         - Save Waveform as .32fl file",
+            "--- CONTROLS (POWER SPECTRUM IN COMMAND MODE) ---",
+            " ",
+            "SHIFT+1,2,3 - Switch estimation type (HANN, HAMMING, RECTANGULAR)",
+            "E/Shift+E  - Decrease/Increase Power of Transform (e.g. 2, 4, 8 ...)",
+            "F/Shift+F  - Decrease/Increase FFT Value",
+            "",
             NULL
         };
         int y_pos = 100;
@@ -291,7 +311,7 @@ void main_loop() {
                 draw_iq_plot(renderer, activeMessage, activeMessageLength, current_mod_type);
                 break;
             case VIEW_POWER_SPECTRUM:
-                    calculate_and_draw_spectrum(renderer, activeMessage, activeMessageLength, current_mod_type, current_window_type, current_view, mouse_x);
+                calculate_and_draw_spectrum(renderer, activeMessage, activeMessageLength, current_mod_type, current_window_type, current_view, mouse_x);
                 break;
         }
         draw_text_object(&status_line1, 10, 10);

@@ -62,7 +62,7 @@ void draw_iq_plot(
             SDL_RenderDrawLine(renderer, prev_x_pos, prev_y_pos, x_pos, y_pos);
         }
 
-        SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
+        SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
         SDL_Rect point_rect = {x_pos - 2, y_pos - 2, 5, 5};
         SDL_RenderFillRect(renderer, &point_rect);
 

@@ -49,23 +49,19 @@ $(OBJ_DIR)/text_renderer.o: $(SRC_DIR)/text_renderer.h
 web:
 	@echo "Building for web..."
 	@mkdir -p $(WEB_DIR)
-	docker run --rm -v $(CURDIR):/src trzeci/emscripten:sdk-incoming-64bit emcc \
-		-Wall \
-		src/main.c \
-		src/helpers.c \
-		src/text_renderer.c \
-		src/time_domain.c \
-		src/iq_plot.c \
-		src/fft.c \
-		-D__EMSCRIPTEN__ \
-		--preload-file assets \
-		--js-library src/library_save_file.js \
-		-s USE_SDL=2 \
-		-s USE_SDL_TTF=2 \
-		-s ALLOW_MEMORY_GROWTH=1 \
-		-s ASYNCIFY \
-		--shell-file src/template.html \
-		-o $(WEB_DIR)/index.html
+	docker run --rm -v $(CURDIR):/src trzeci/emscripten:sdk-incoming-64bit \
+		sh -c "emcc \
+			-Wall \
+			$(shell find $(SRC_DIR) -name '*.c' | sed 's|^|/src/|') \
+			-D__EMSCRIPTEN__ \
+			--preload-file assets \
+			--js-library src/library_save_file.js \
+			-s USE_SDL=2 \
+			-s USE_SDL_TTF=2 \
+			-s ALLOW_MEMORY_GROWTH=1 \
+			-s ASYNCIFY \
+			--shell-file src/template.html \
+			-o $(WEB_DIR)/index.html"
 	@echo "Web build complete: '$(WEB_DIR)/index.html'"
 
 # Rule to clean up all generated files

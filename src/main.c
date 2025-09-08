@@ -196,13 +196,17 @@ void main_loop() {
         SDL_SetRenderDrawBlendMode(renderer, SDL_BLENDMODE_NONE);
 
         const char* help_lines[] = {
+            "--- CONTROLS (ANY MODE) ---",
+            "Enter     - Modulate Typed Message",
+            "Backspace - Erase letter",
+            "TAB       - Toggle Typing/Command Mode",
+            "Arrows    - Adjust Amplitude & Frequency (Time Domain) | Zoom & Move (Power Spectrum)",
+            " ",
             "--- CONTROLS (COMMAND MODE) ---",
             " ",
-            "TAB       - Toggle Typing/Command Mode",
             "H         - Toggle this Help Screen",
             "1,2,3     - Switch Modulation (ASK, FSK, PSK)",
             "CTRL + 1,2,3     - Switch View (Time Domain, IQ Plot, Power Spectrum)",
-            "Arrows    - Adjust Amplitude & Frequency (Time Domain) | Zoom & Move (Power Spectrmu)",
             "M/Shift+M - Decrease/Increase Modulation Order (BPSK, QPSK...)",
             "N/Shift+N - Decrease/Increase SNR",
             "B/Shift+B - Decrease/Increase Roll-off Factor",
@@ -213,7 +217,6 @@ void main_loop() {
             "Space     - Pause/Resume Scrolling",
             "0 (zero)  - Reset All Waveform Parameters",
             "S         - Save Waveform as .32fl file",
-            "Enter     - Modulate Typed Message",
             NULL
         };
         int y_pos = 100;

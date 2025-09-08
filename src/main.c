@@ -250,7 +250,8 @@ void main_loop() {
         else sprintf(mod_full_str, "%d-%s", mod_ord, mod_str);
         
         snprintf(buffer_l1, sizeof(buffer_l1), "A:%.0f F:%.0f %s", amplitude, frequency, mod_full_str);
-        snprintf(buffer_l2, sizeof(buffer_l2), "px/bit:%d SNR:%.0fdB Roll-off:%.2f, Fs:%.f Hz", pixelsPerBit, snr_db, rolloff_factor, sampling_rate);        snprintf(buffer_mode, sizeof(buffer_mode), "Mode: %s", current_mode == MODE_TYPING ? "Typing" : "Command");
+        snprintf(buffer_l2, sizeof(buffer_l2), "px/bit:%d SNR:%.0fdB Roll-off:%.2f, Fs:%.f Hz", pixelsPerBit, snr_db, rolloff_factor, sampling_rate);        
+        snprintf(buffer_mode, sizeof(buffer_mode), "Mode: %s", current_mode == MODE_TYPING ? "Typing" : "Command");
 
         update_text_object(&status_line1, buffer_l1);
         update_text_object(&status_line2, buffer_l2);

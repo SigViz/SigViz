@@ -24,7 +24,7 @@ jobs:
             -v $GITHUB_WORKSPACE:/src \
             trzeci/emscripten:sdk-incoming-64bit \
             bash -c "cd /src && emcc -o build/index.html \
-            src/main.c src/text_renderer.c \
+            src/main.c src/text_renderer.c src/fft.c src/iq_plot.c src/time_domain.c src/tinyfiledialogs.c src/helpers.c \
             -Wall -s USE_SDL=2 -s USE_SDL_TTF=2 \
             --preload-file assets@assets -s ALLOW_MEMORY_GROWTH \
             --js-library src/library_final.js \

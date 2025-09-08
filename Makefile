@@ -1,18 +1,18 @@
+# Compiler for native build
+CC = gcc
+
+# --- Native Build Configuration ---
+NATIVE_CFLAGS = -Wall -Wextra -g `sdl2-config --cflags`
+NATIVE_LDFLAGS = `sdl2-config --libs` -lSDL2_ttf -lm
+
 # --- Project Structure ---
 SRC_DIR = src
 OBJ_DIR = obj
 BIN_DIR = bin
 WEB_DIR = web
 
-# Manually list all .c files in the src directory
-SOURCES = $(SRC_DIR)/main.c \
-          $(SRC_DIR)/fft.c \
-          $(SRC_DIR)/iq_plot.c \
-          $(SRC_DIR)/text_renderer.c \
-          $(SRC_DIR)/time_domain.c \
-          $(SRC_DIR)/tinyfiledialogs.c \
-          $(SRC_DIR)/helpers.c
-
+# Automatically find all .c files in the src directory
+SOURCES = $(wildcard $(SRC_DIR)/*.c)
 # Create a list of corresponding object files
 OBJECTS = $(patsubst $(SRC_DIR)/%.c, $(OBJ_DIR)/%.o, $(SOURCES))
 # Create a list of source files with the correct paths for the Docker container
